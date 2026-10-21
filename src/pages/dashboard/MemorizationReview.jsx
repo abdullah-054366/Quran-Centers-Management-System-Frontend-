@@ -1,7 +1,13 @@
 import { useState } from "react";
-import { BookOpen, ClipboardCheck, Save } from "lucide-react";
-import { students } from "../../api/students";
+import { Plus, Save, Trash2 } from "lucide-react";
 
+const students = [
+  { id: 1, name: "عبدالرحمن خالد", group: "حلقة الفجر" },
+  { id: 2, name: "سلمان محمد", group: "حلقة الفجر" },
+  { id: 3, name: "فيصل عبدالله", group: "حلقة الضحى" },
+  { id: 4, name: "عمر صالح", group: "حلقة العصر" },
+  { id: 5, name: "ياسر إبراهيم", group: "حلقة الضحى" },
+];
 
 const surahs = [
   { name: "الفاتحة", ayahs: 7 },
@@ -20,129 +26,158 @@ const today = new Intl.DateTimeFormat("en-CA", {
   timeZone: "Asia/Riyadh",
 }).format(new Date());
 
-function Field({ label, children }) {
+const inputClass =
+  "w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-emerald-700 focus:ring-2 focus:ring-emerald-700/10";
+
+function createEntry() {
+  return {
+    id: `${Date.now()}-${Math.random()}`,
+    surah: "",
+    complete: false,
+    fromAyah: "",
+    toAyah: "",
+    pages: "",
+    grade: "ممتاز",
+  };
+}
+
+function Field({ label, children, className = "" }) {
   return (
-    <label className="block text-sm font-bold text-slate-700">
+    <label className={`block text-sm font-semibold text-slate-600 ${className}`}>
       <span className="mb-2 block">{label}</span>
       {children}
     </label>
   );
 }
 
-export default function MemorizationReview() {
-  const [type, setType] = useState("حفظ");
+export default function MemorizationReviewPage() {
   const [studentId, setStudentId] = useState("");
-  const [surahName, setSurahName] = useState("");
-  const [fromAyah, setFromAyah] = useState("");
-  const [toAyah, setToAyah] = useState("");
-  const [pages, setPages] = useState("");
-  const [grade, setGrade] = useState("ممتاز");
+  const [recordType, setRecordType] = useState("حفظ");
   const [date, setDate] = useState(today);
+  const [entries, setEntries] = useState([createEntry()]);
   const [notes, setNotes] = useState("");
-  const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
 
-  const selectedSurah = surahs.find((surah) => surah.name === surahName);
+  const totalPages = entries.reduce(
+    (total, entry) => total + (Number(entry.pages) || 0),
+    0
+  );
 
-  function handleSubmit(event) {
+  function updateEntry(id, field, value) {
+    setEntries((current) =>
+      current.map((entry) =>
+        entry.id === id ? { ...entry, [field]: value } : entry
+      )
+    );
+  }
+
+  function addEntry() {
+    setEntries((current) => [...current, createEntry()]);
+  }
+
+  function removeEntry(id) {
+    setEntries((current) => current.filter((entry) => entry.id !== id));
+  }
+
+  function submitSession(event) {
     event.preventDefault();
     setError("");
-    setMessage("");
+    setSuccess("");
 
-    const from = Number(fromAyah);
-    const to = Number(toAyah);
-    const pageCount = Number(pages);
-
-    if (!selectedSurah) {
-      setError("اختر السورة.");
+    if (!studentId) {
+      setError("اختر الطالب.");
       return;
     }
 
-    if (from < 1 || to < from || to > selectedSurah.ayahs) {
-      setError(
-        `تأكد من الآيات. سورة ${surahName} تحتوي على ${selectedSurah.ayahs} آية.`
-      );
-      return;
+    for (const entry of entries) {
+      const surahInfo = surahs.find((item) => item.name === entry.surah);
+
+      if (!surahInfo) {
+        setError("اختر السورة لكل سطر.");
+        return;
+      }
+
+      const from = entry.complete ? 1 : Number(entry.fromAyah);
+      const to = entry.complete
+        ? surahInfo.ayahs
+        : Number(entry.toAyah);
+
+      if (
+        !Number.isInteger(from) ||
+        !Number.isInteger(to) ||
+        from < 1 ||
+        to < from ||
+        to > surahInfo.ayahs
+      ) {
+        setError(`تحقق من الآيات المحددة في سورة ${entry.surah}.`);
+        return;
+      }
+
+      if (!Number.isFinite(Number(entry.pages)) || Number(entry.pages) <= 0) {
+        setError(`أدخل عدد الصفحات لسورة ${entry.surah}.`);
+        return;
+      }
     }
 
-    if (!Number.isFinite(pageCount) || pageCount <= 0) {
-      setError("أدخل عدد صفحات صحيحاً أكبر من صفر.");
-      return;
-    }
+    const student = students.find(
+      (item) => item.id === Number(studentId)
+    );
 
-    const student = students.find((item) => item.id === Number(studentId));
-
-    const record = {
-      type,
-      studentId: Number(studentId),
-      studentName: student?.name,
-      group: student?.group,
-      surah: surahName,
-      fromAyah: from,
-      toAyah: to,
-      pages: pageCount,
-      grade,
+    const session = {
+      studentId: student.id,
+      studentName: student.name,
+      group: student.group,
+      type: recordType,
       date,
       notes,
+      records: entries.map((entry) => {
+        const surahInfo = surahs.find(
+          (item) => item.name === entry.surah
+        );
+
+        return {
+          surah: entry.surah,
+          complete: entry.complete,
+          fromAyah: entry.complete ? 1 : Number(entry.fromAyah),
+          toAyah: entry.complete
+            ? surahInfo.ayahs
+            : Number(entry.toAyah),
+          pages: Number(entry.pages),
+          grade: entry.grade,
+        };
+      }),
     };
 
-    // استبدل هذا بطلب API لحفظ السجل في الباك اند.
-    console.log("سجل الحفظ والمراجعة:", record);
+    // استبدل هذا بطلب API عند ربط الباك اند.
+    console.log("جلسة التسميع:", session);
 
-    setMessage(`تم تسجيل ${type} الطالب ${student?.name} بنجاح.`);
+    setSuccess(`تم تسجيل الجلسة للطالب ${student.name}.`);
     setStudentId("");
-    setSurahName("");
-    setFromAyah("");
-    setToAyah("");
-    setPages("");
     setNotes("");
+    setEntries([createEntry()]);
   }
 
   return (
-    <main dir="rtl" className="mx-auto max-w-4xl space-y-6">
+    <main dir="rtl" className="mx-auto max-w-6xl space-y-5">
       <header>
         <h1 className="text-2xl font-extrabold text-slate-800">
           تسجيل الحفظ والمراجعة
         </h1>
-        <p className="mt-1 text-sm text-slate-400">
-          سجّل تسميع الطالب وحدد الآيات وعدد الصفحات.
+        <p className="mt-1 text-sm text-slate-500">
+          أدخل بيانات الجلسة مرة واحدة، ثم أضف السور التي سمّعها الطالب.
         </p>
       </header>
 
-      <section className="rounded-2xl border border-slate-100 bg-white p-2 shadow-sm">
-        <div className="grid grid-cols-2 gap-2">
-          {[
-            { value: "حفظ", label: "حفظ جديد", Icon: BookOpen },
-            { value: "مراجعة", label: "مراجعة", Icon: ClipboardCheck },
-          ].map(({ value, label, Icon }) => (
-            <button
-              key={value}
-              type="button"
-              onClick={() => setType(value)}
-              className={`flex items-center justify-center gap-2 rounded-xl px-3 py-3 text-sm font-bold transition ${
-                type === value
-                  ? "bg-emerald-800 text-white"
-                  : "text-slate-500 hover:bg-emerald-50"
-              }`}
-            >
-              <Icon size={18} />
-              {label}
-            </button>
-          ))}
-        </div>
-      </section>
-
-      <form
-        onSubmit={handleSubmit}
-        className="space-y-5 rounded-2xl border border-slate-100 bg-white p-5 shadow-sm md:p-6"
-      >
-        <div className="grid gap-4 sm:grid-cols-2">
+      <form onSubmit={submitSession} className="space-y-5">
+        {/* بيانات مشتركة للجلسة */}
+        <section className="grid gap-4 rounded-2xl border border-slate-100 bg-white p-4 shadow-sm md:grid-cols-3 md:p-5">
           <Field label="الطالب">
             <select
               required
               value={studentId}
               onChange={(event) => setStudentId(event.target.value)}
-              className="w-full rounded-xl border border-slate-200 bg-white px-3 py-3 outline-none focus:border-emerald-700"
+              className={inputClass}
             >
               <option value="">اختر الطالب</option>
               {students.map((student) => (
@@ -153,116 +188,233 @@ export default function MemorizationReview() {
             </select>
           </Field>
 
-          <Field label="تاريخ التسميع">
+          <Field label="التاريخ">
             <input
               required
               type="date"
               value={date}
               onChange={(event) => setDate(event.target.value)}
-              className="w-full rounded-xl border border-slate-200 px-3 py-3 outline-none focus:border-emerald-700"
+              className={inputClass}
             />
           </Field>
 
-          <Field label="السورة">
+          <Field label="نوع التسميع">
             <select
-              required
-              value={surahName}
-              onChange={(event) => setSurahName(event.target.value)}
-              className="w-full rounded-xl border border-slate-200 bg-white px-3 py-3 outline-none focus:border-emerald-700"
+              value={recordType}
+              onChange={(event) => setRecordType(event.target.value)}
+              className={inputClass}
             >
-              <option value="">اختر السورة</option>
-              {surahs.map((surah) => (
-                <option key={surah.name} value={surah.name}>
-                  سورة {surah.name} ({surah.ayahs} آية)
-                </option>
-              ))}
+              <option value="حفظ">حفظ جديد</option>
+              <option value="مراجعة">مراجعة</option>
             </select>
           </Field>
+        </section>
 
-          <Field label="التقييم">
-            <select
-              value={grade}
-              onChange={(event) => setGrade(event.target.value)}
-              className="w-full rounded-xl border border-slate-200 bg-white px-3 py-3 outline-none focus:border-emerald-700"
+        {/* السور */}
+        <section className="space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="font-extrabold text-slate-800">
+                السور المسَمَّعة
+              </h2>
+              <p className="mt-1 text-xs text-slate-500">
+                {entries.length} {entries.length === 1 ? "سورة" : "سور"} ·
+                مجموع الصفحات: {totalPages}
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={addEntry}
+              className="inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-white px-4 py-2.5 text-sm font-bold text-emerald-800 hover:bg-emerald-50"
             >
-              <option>ممتاز</option>
-              <option>جيد جداً</option>
-              <option>جيد</option>
-              <option>يحتاج متابعة</option>
-            </select>
-          </Field>
-
-          <Field label="من آية">
-            <input
-              required
-              type="number"
-              min="1"
-              max={selectedSurah?.ayahs}
-              value={fromAyah}
-              onChange={(event) => setFromAyah(event.target.value)}
-              placeholder="مثال: ١"
-              className="w-full rounded-xl border border-slate-200 px-3 py-3 outline-none focus:border-emerald-700"
-            />
-          </Field>
-
-          <Field label="إلى آية">
-            <input
-              required
-              type="number"
-              min={fromAyah || "1"}
-              max={selectedSurah?.ayahs}
-              value={toAyah}
-              onChange={(event) => setToAyah(event.target.value)}
-              placeholder="مثال: ١٠"
-              className="w-full rounded-xl border border-slate-200 px-3 py-3 outline-none focus:border-emerald-700"
-            />
-          </Field>
-
-          <Field label="عدد الصفحات">
-            <input
-              required
-              type="number"
-              min="0.25"
-              step="0.25"
-              value={pages}
-              onChange={(event) => setPages(event.target.value)}
-              placeholder="مثال: ٢"
-              className="w-full rounded-xl border border-slate-200 px-3 py-3 outline-none focus:border-emerald-700"
-            />
-          </Field>
-
-          <div className="sm:col-span-2">
-            <Field label="ملاحظات المعلم">
-              <textarea
-                rows={3}
-                value={notes}
-                onChange={(event) => setNotes(event.target.value)}
-                placeholder="ملاحظات اختيارية عن التسميع..."
-                className="w-full rounded-xl border border-slate-200 px-3 py-3 outline-none focus:border-emerald-700"
-              />
-            </Field>
+              <Plus size={17} />
+              إضافة سورة
+            </button>
           </div>
-        </div>
 
-        {error && (
-          <p role="alert" className="rounded-xl bg-rose-50 p-3 text-sm text-rose-700">
-            {error}
-          </p>
-        )}
+          {entries.map((entry, index) => {
+            const selectedSurah = surahs.find(
+              (item) => item.name === entry.surah
+            );
 
-        {message && (
-          <p className="rounded-xl bg-emerald-50 p-3 text-sm text-emerald-800">
-            {message}
-          </p>
-        )}
+            return (
+              <article
+                key={entry.id}
+                className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm"
+              >
+                <div className="mb-4 flex items-center justify-between">
+                  <h3 className="font-bold text-slate-800">
+                    {index + 1}. {entry.surah ? `سورة ${entry.surah}` : "سورة جديدة"}
+                  </h3>
 
-        <button
-          type="submit"
-          className="inline-flex items-center gap-2 rounded-xl bg-emerald-800 px-5 py-3 text-sm font-bold text-white hover:bg-emerald-900"
-        >
-          <Save size={17} />
-          حفظ سجل {type}
-        </button>
+                  {entries.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => removeEntry(entry.id)}
+                      aria-label={`حذف السورة رقم ${index + 1}`}
+                      className="rounded-lg p-2 text-slate-400 hover:bg-rose-50 hover:text-rose-700"
+                    >
+                      <Trash2 size={17} />
+                    </button>
+                  )}
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
+                  <Field label="السورة" className="lg:col-span-2">
+                    <select
+                      required
+                      value={entry.surah}
+                      onChange={(event) =>
+                        updateEntry(entry.id, "surah", event.target.value)
+                      }
+                      className={inputClass}
+                    >
+                      <option value="">اختر السورة</option>
+                      {surahs.map((surah) => (
+                        <option key={surah.name} value={surah.name}>
+                          سورة {surah.name}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+
+                  <Field label="طريقة التسميع" className="lg:col-span-2">
+                    <select
+                      value={entry.complete ? "complete" : "range"}
+                      onChange={(event) =>
+                        updateEntry(
+                          entry.id,
+                          "complete",
+                          event.target.value === "complete"
+                        )
+                      }
+                      className={inputClass}
+                    >
+                      <option value="range">تحديد آيات</option>
+                      <option value="complete">السورة كاملة</option>
+                    </select>
+                  </Field>
+
+                  <Field label="عدد الصفحات">
+                    <input
+                      required
+                      type="number"
+                      min="0.25"
+                      step="0.25"
+                      value={entry.pages}
+                      onChange={(event) =>
+                        updateEntry(entry.id, "pages", event.target.value)
+                      }
+                      placeholder="مثال: ٢"
+                      className={inputClass}
+                    />
+                  </Field>
+
+                  <Field label="التقييم">
+                    <select
+                      value={entry.grade}
+                      onChange={(event) =>
+                        updateEntry(entry.id, "grade", event.target.value)
+                      }
+                      className={inputClass}
+                    >
+                      <option>ممتاز</option>
+                      <option>جيد جداً</option>
+                      <option>جيد</option>
+                      <option>يحتاج متابعة</option>
+                    </select>
+                  </Field>
+                </div>
+
+                {entry.complete ? (
+                  <p className="mt-3 rounded-xl bg-emerald-50 px-3 py-2.5 text-sm text-emerald-800">
+                    {selectedSurah
+                      ? `سيتم تسجيل السورة كاملة: من الآية ١ إلى ${selectedSurah.ayahs}.`
+                      : "اختر السورة لتسجيلها كاملة."}
+                  </p>
+                ) : (
+                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                    <Field label="من آية">
+                      <input
+                        required
+                        type="number"
+                        min="1"
+                        max={selectedSurah?.ayahs}
+                        value={entry.fromAyah}
+                        onChange={(event) =>
+                          updateEntry(entry.id, "fromAyah", event.target.value)
+                        }
+                        placeholder="١"
+                        className={inputClass}
+                      />
+                    </Field>
+
+                    <Field label="إلى آية">
+                      <input
+                        required
+                        type="number"
+                        min={entry.fromAyah || "1"}
+                        max={selectedSurah?.ayahs}
+                        value={entry.toAyah}
+                        onChange={(event) =>
+                          updateEntry(entry.id, "toAyah", event.target.value)
+                        }
+                        placeholder="١٠"
+                        className={inputClass}
+                      />
+                    </Field>
+                  </div>
+                )}
+              </article>
+            );
+          })}
+        </section>
+
+        {/* ملاحظات وحفظ */}
+        <section className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+          <Field label="ملاحظات للمعلم (اختياري)">
+            <textarea
+              rows={3}
+              value={notes}
+              onChange={(event) => setNotes(event.target.value)}
+              placeholder="ملاحظة عن جلسة التسميع..."
+              className={`${inputClass} resize-y`}
+            />
+          </Field>
+
+          {error && (
+            <p
+              role="alert"
+              className="mt-4 rounded-xl bg-rose-50 p-3 text-sm text-rose-700"
+            >
+              {error}
+            </p>
+          )}
+
+          {success && (
+            <p className="mt-4 rounded-xl bg-emerald-50 p-3 text-sm text-emerald-800">
+              {success}
+            </p>
+          )}
+
+          <div className="mt-4 flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+            <p className="text-sm text-slate-500">
+              مجموع صفحات الجلسة:{" "}
+              <span className="font-extrabold text-slate-800">
+                {totalPages}
+              </span>
+            </p>
+
+            <button
+              type="submit"
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-800 px-5 py-3 text-sm font-bold text-white hover:bg-emerald-900"
+            >
+              <Save size={17} />
+              حفظ جلسة {recordType}
+            </button>
+          </div>
+        </section>
       </form>
     </main>
   );
