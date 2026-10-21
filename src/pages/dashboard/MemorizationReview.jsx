@@ -50,7 +50,7 @@ function Field({ label, children, className = "" }) {
   );
 }
 
-export default function MemorizationReviewPage() {
+export default function MemorizationReview() {
   const [studentId, setStudentId] = useState("");
   const [recordType, setRecordType] = useState("حفظ");
   const [date, setDate] = useState(today);
