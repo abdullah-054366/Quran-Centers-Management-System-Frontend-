@@ -1,12 +1,14 @@
+import { Link } from "react-router";
 import Stats from "../../components/Stats";
 import {
-  ArrowUpLeft,
+ 
   BookOpen,
-  Building2,
   CalendarCheck,
-  GraduationCap,
   Users,
 } from "lucide-react";
+
+import { useAuth } from "../../context/AuthContext";
+
 
 const activities = [
   {
@@ -106,6 +108,10 @@ export default function Dashboard() {
     month: "long",
   }).format(new Date());
 
+
+  const { user } = useAuth();
+
+console.log("User :", user); // تحقق من دور المستخدم في وحدة التحكم
   return (
     <main dir="rtl" className="mx-auto max-w-7xl space-y-6 p-4 md:p-8">
       {/* الترحيب */}
@@ -114,24 +120,26 @@ export default function Dashboard() {
         <div>
           <p className="mb-3 text-sm text-emerald-100">{date}</p>
           <h1 className="text-2xl font-extrabold md:text-3xl">
-            السلام عليكم، مدير المنصة 👋
+             مرحبا مدير المنصة 👋
           </h1>
           <p className="mt-2 text-sm text-emerald-50/80">
             إليك نظرة عامة على أداء المراكز القرآنية.
           </p>
         </div>
 
-        <button className="flex items-center justify-center gap-2 rounded-xl bg-white px-4 py-3 text-sm font-bold text-emerald-900 hover:bg-emerald-50">
+        <Link 
+         to ="/attendance"
+        className="flex items-center justify-center gap-2 rounded-xl bg-white px-4 py-3 text-sm font-bold text-emerald-900 hover:bg-emerald-50">
           <CalendarCheck size={18} />
           تسجيل الحضور
-        </button>
+        </Link>
       </section>
 
       {/* ملخص الأرقام */}
       <Stats />
 
       {/* الرسم والأنشطة */}
-      <section className="grid gap-5 xl:grid-cols-3">
+      {/* <section className="grid gap-5 xl:grid-cols-3">
         <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm xl:col-span-2">
           <div className="mb-6">
             <h2 className="font-extrabold">نظرة عامة على الحفظ</h2>
@@ -160,7 +168,7 @@ export default function Dashboard() {
           </div>
           <ActivityList />
         </div>
-      </section>
+      </section> */}
 
       {/* تقدم الطلاب */}
       <section className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
@@ -195,6 +203,8 @@ export default function Dashboard() {
           ))}
         </div>
       </section>
+
+      
     </main>
   );
 }
