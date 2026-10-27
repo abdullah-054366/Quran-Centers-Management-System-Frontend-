@@ -20,7 +20,7 @@ const surahs = Array.from({ length: 114 }, (_, index) => {
 
   return {
     id,
-    name: metadata.name.replace(/[\u064B-\u065F\u0670ـ]/g, ""),
+    name: metadata.name,
     ayahs,
     firstPage,
     lastPage,
@@ -78,34 +78,18 @@ export default function MemorizationReview() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
-  const selectedSurah = surahs.find(
-    (surah) => surah.id === Number(surahId)
-  );
+  const selectedSurah = surahs.find((surah) => surah.id === Number(surahId));
 
-  const firstSurah = surahs.find(
-    (surah) => surah.id === Number(fromSurahId)
-  );
+  const firstSurah = surahs.find((surah) => surah.id === Number(fromSurahId));
 
-  const lastSurah = surahs.find(
-    (surah) => surah.id === Number(toSurahId)
-  );
+  const lastSurah = surahs.find((surah) => surah.id === Number(toSurahId));
 
   const pageCount = multipleSurahs
-    ? getPageCount(
-        fromSurahId,
-        1,
-        toSurahId,
-        lastSurah?.ayahs
-      )
+    ? getPageCount(fromSurahId, 1, toSurahId, lastSurah?.ayahs)
     : selectedSurah
       ? completeSurah
         ? selectedSurah.pages
-        : getPageCount(
-            surahId,
-            fromAyah,
-            surahId,
-            toAyah
-          )
+        : getPageCount(surahId, fromAyah, surahId, toAyah)
       : "";
 
   function resetForm() {
@@ -171,9 +155,7 @@ export default function MemorizationReview() {
       return;
     }
 
-    const student = students.find(
-      (item) => item.id === Number(studentId)
-    );
+    const student = students.find((item) => item.id === Number(studentId));
 
     let records;
 
@@ -181,8 +163,7 @@ export default function MemorizationReview() {
       // نرسل سجلاً لكل سورة ضمن الجلسة نفسها.
       records = surahs
         .filter(
-          (surah) =>
-            surah.id >= firstSurah.id && surah.id <= lastSurah.id
+          (surah) => surah.id >= firstSurah.id && surah.id <= lastSurah.id,
         )
         .map((surah) => ({
           surahId: surah.id,
@@ -200,9 +181,7 @@ export default function MemorizationReview() {
           surah: selectedSurah.name,
           complete: completeSurah,
           fromAyah: completeSurah ? 1 : Number(fromAyah),
-          toAyah: completeSurah
-            ? selectedSurah.ayahs
-            : Number(toAyah),
+          toAyah: completeSurah ? selectedSurah.ayahs : Number(toAyah),
           pages: Number(pageCount),
           grade,
         },
@@ -225,7 +204,7 @@ export default function MemorizationReview() {
     console.log("جلسة التسميع:", session);
 
     setSuccess(
-      `تم تسجيل ${recordType} الطالب ${student.name}، بإجمالي ${pageCount} صفحة.`
+      `تم تسجيل ${recordType} الطالب ${student.name}، بإجمالي ${pageCount} صفحة.`,
     );
 
     resetForm();
@@ -309,9 +288,7 @@ export default function MemorizationReview() {
         <section className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm md:p-5">
           {multipleSurahs ? (
             <>
-              <h2 className="mb-4 font-extrabold text-slate-800">
-                نطاق السور
-              </h2>
+              <h2 className="mb-4 font-extrabold text-slate-800">نطاق السور</h2>
 
               <div className="grid gap-4 sm:grid-cols-2">
                 <Field label="من سورة">
@@ -378,8 +355,12 @@ export default function MemorizationReview() {
                   >
                     <option value="">اختر السورة</option>
                     {surahs.map((surah) => (
-                      <option key={surah.id} value={surah.id}>
-                        {surah.id}. سورة {surah.name} — {surah.ayahs} آية
+                      <option
+                        key={surah.id}
+                        value={surah.id}
+                        disabled={firstSurah && surah.id < firstSurah.id}
+                      >
+                        {surah.id}. سورة {surah.name}
                       </option>
                     ))}
                   </select>
@@ -389,8 +370,7 @@ export default function MemorizationReview() {
                   <select
                     value={completeSurah ? "complete" : "range"}
                     onChange={(event) => {
-                      const isComplete =
-                        event.target.value === "complete";
+                      const isComplete = event.target.value === "complete";
                       setCompleteSurah(isComplete);
                       setFromAyah("");
                       setToAyah("");
@@ -435,8 +415,7 @@ export default function MemorizationReview() {
 
               {selectedSurah && completeSurah && (
                 <p className="mt-4 rounded-xl bg-emerald-50 p-3 text-sm text-emerald-800">
-                  سورة {selectedSurah.name} كاملة ·{" "}
-                  {selectedSurah.pages} صفحة
+                  سورة {selectedSurah.name} كاملة · {selectedSurah.pages} صفحة
                 </p>
               )}
             </>
