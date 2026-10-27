@@ -1,5 +1,7 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import { VitePWA } from "vite-plugin-pwa";
+
 export default defineConfig({
   plugins: [
     react(),
@@ -9,25 +11,41 @@ export default defineConfig({
 
       manifest: {
         id: "/",
-        name: "My React App",
-        short_name: "MyApp",
-        description: "My web application",
+        name: "مشكاة",
+        short_name: "مشكاة",
+        description: "منصة إدارة حلقات القرآن الكريم",
+        lang: "ar",
+        dir: "rtl",
         start_url: "/",
         scope: "/",
         display: "standalone",
-        background_color: "#ffffff",
-        theme_color: "#2563eb",
+        background_color: "#09362A",
+        theme_color: "#0F4C3A",
 
         icons: [
           {
-            src: "/icons/icon-192.png",
+            src: "/icons/icon-192x192.png",
             sizes: "192x192",
             type: "image/png",
+            purpose: "any",
           },
           {
-            src: "/icons/icon-512.png",
+            src: "/icons/icon-512x512.png",
             sizes: "512x512",
             type: "image/png",
+            purpose: "any",
+          },
+          {
+            src: "/icons/icon-192x192.png",
+            sizes: "192x192",
+            type: "image/png",
+            purpose: "maskable",
+          },
+          {
+            src: "/icons/icon-512x512.png",
+            sizes: "512x512",
+            type: "image/png",
+            purpose: "maskable",
           },
         ],
       },
