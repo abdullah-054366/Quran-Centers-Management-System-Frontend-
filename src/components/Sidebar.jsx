@@ -1,4 +1,5 @@
 import { NavLink } from "react-router";
+import { useAuth } from "../context/AuthContext";
 import {
   BookOpen,
   Building2,
@@ -6,21 +7,45 @@ import {
   ClipboardList,
   GraduationCap,
   LayoutDashboard,
+  UserRound,
   Users,
-  X,
 } from "lucide-react";
 
 const links = [
   { to: "/", label: "الرئيسية", icon: LayoutDashboard, end: true },
   { to: "/student", label: "ملفي وجدول الحفظ", icon: BookOpen },
-  { to: "/centers", label: "المراكز", icon: Building2 },
   { to: "/groups", label: "الحلقات", icon: Users },
+  { to: "/teachers", label: "المدرسون", icon: UserRound },
   { to: "/students", label: "الطلاب", icon: GraduationCap },
   { to: "/attendance", label: "الحضور والغياب", icon: CalendarCheck },
   { to: "/plans", label: "خطط الحفظ", icon: ClipboardList },
 ];
 
+
+
+
+
 export default function Sidebar({ open, onClose }) {
+  const { user } = useAuth();
+
+  const visibleLinks = links.filter((l) => {
+    //صلاحيات مدير المنصة فقط
+  if (l.to === "/centers") return user?.role === "PlatformAdmin";
+
+  // المدرسون متاحون للمشرف ومدير المركز
+  if (l.to === "/teachers") return ["Admin", "CenterAdmin"].includes(user?.role);
+
+  //صلاحيات المديرين المركز
+  if (l.to === "/groups") return ["Admin", "CenterAdmin"].includes(user?.role);
+
+  // صلاحيات المدرسين
+
+
+  // صلاحيات الطلاب فقط
+  if (l.to === "/student") return user?.role === "Student";
+  return true;
+});
+
   return (
     <aside
       className={`fixed inset-y-0 right-0 z-40 flex w-[260px] flex-col border-l border-slate-100 bg-white transition-transform lg:translate-x-0 ${
@@ -37,7 +62,6 @@ export default function Sidebar({ open, onClose }) {
             <p className="text-xs text-slate-400">إدارة الحلقات القرآنية</p>
           </div>
         </div>
-
       </div>
 
       <nav className="flex-1 space-y-1 p-3">
@@ -45,7 +69,7 @@ export default function Sidebar({ open, onClose }) {
           القائمة الرئيسية
         </p>
 
-        {links.map(({ to, label, icon: Icon, end }) => (
+        {visibleLinks.map(({ to, label, icon: Icon, end }) => (
           <NavLink
             key={to}
             to={to}
@@ -62,8 +86,9 @@ export default function Sidebar({ open, onClose }) {
             <Icon size={19} />
             <span>{label}</span>
           </NavLink>
-          
         ))}
+
+       
       </nav>
 
       <div className="border-t p-4">

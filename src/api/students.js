@@ -1,7 +1,23 @@
-export const students = [
-  { id: 1, name: "عبدالرحمن خالد", group: "حلقة الفجر" },
-  { id: 2, name: "سلمان محمد", group: "حلقة الفجر" },
-  { id: 3, name: "فيصل عبدالله", group: "حلقة الضحى" },
-  { id: 4, name: "عمر صالح", group: "حلقة العصر" },
-  { id: 5, name: "ياسر إبراهيم", group: "حلقة الضحى" },
-];
+import api from "./api";
+
+const STUDENTS_ENDPOINT = "/Students";
+
+export const getStudents = async () => {
+  try {
+    const response = await api.get(`${STUDENTS_ENDPOINT}/All`);
+    return response.data;
+  } catch (error) {
+    console.error("Error fetching students:", error);
+    throw error;
+  }
+};
+
+export const getStudentById = async (studentId) => {
+  try {
+    const response = await api.get(`${STUDENTS_ENDPOINT}/${studentId}`);
+    return response.data;
+  } catch (error) {
+    console.error("Error fetching student:", error);
+    throw error;
+  }
+};

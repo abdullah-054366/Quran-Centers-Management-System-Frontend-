@@ -4,18 +4,7 @@ import { useAuth } from "../../context/AuthContext";
 import { getErrorMessage } from "../../api/axiosClient";
 
 function getHomePath(role) {
-  switch (role) {
-    case "PlatformAdmin":
-      return "/platform";
-    case "CenterAdmin":
-      return "/center";
-    case "Teacher":
-      return "/teacher";
-    case "Student":
-      return "/student";
-    default:
-      return "/";
-  }
+  return role === "Student" ? "/student" : "/";
 }
 
 export default function Login() {
@@ -35,7 +24,12 @@ export default function Login() {
 
     try {
       const user = await login({ email, password });
-      navigate(getHomePath(user?.role), { replace: true });
+      const requestedLocation = location.state?.from;
+      const requestedPath = requestedLocation?.pathname;
+      const destination = requestedPath && requestedPath !== "/login" && requestedPath !== "/register"
+        ? `${requestedPath}${requestedLocation.search ?? ""}${requestedLocation.hash ?? ""}`
+        : getHomePath(user?.role);
+      navigate(destination, { replace: true });
      
     } catch (err) {
       setError(getErrorMessage(err));

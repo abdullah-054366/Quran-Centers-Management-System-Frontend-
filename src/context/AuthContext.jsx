@@ -39,7 +39,6 @@ function decodeJwt(token) {
 // الـ API لا يرجع كائن user، فنبنيه من الـ JWT
 function buildUser(accessToken, fallbackEmail) {
   const claims = decodeJwt(accessToken);
-  console.log("Claims :", claims); // تحقق من محتوى الـ JWT في وحدة التحكم
   if (!claims) return null;
 
   const role = claims[`${CLAIM_PREFIX}role`] ?? claims.role ?? null;
@@ -48,6 +47,9 @@ function buildUser(accessToken, fallbackEmail) {
     id: claims[NAME_ID_CLAIM] ?? claims.Id ?? claims.sub ?? null,
     email: claims[EMAIL_CLAIM] ?? claims.email ?? fallbackEmail ?? null,
     role: Array.isArray(role) ? role[0] : role,
+    centerId: claims.centerId ? Number(claims.centerId) : null,
+    teacherId: claims.teacherId ? Number(claims.teacherId) : null,
+    studentId: claims.studentId ? Number(claims.studentId) : null,
   };
 }
 
@@ -63,16 +65,29 @@ export function AuthProvider({ children }) {
     let isMounted = true;
 
     // عند فشل الجلسة نهائياً (من الـ interceptor) نخرج المستخدم
-    setAuthFailureHandler(() => setUser(null));
+    setAuthFailureHandler(() => {
+      setUser(null);
+      setIsLoading(false);
+    });
 
-    if (!tokenStore.getRefreshToken() || !tokenStore.getEmail()) {
+    const refreshToken = tokenStore.getRefreshToken();
+    const email = tokenStore.getEmail();
+
+    if (!refreshToken || !email) {
+      tokenStore.clear();
+      setIsLoading(false);
       return undefined;
     }
 
     refreshSession()
       .then((accessToken) => {
+        const restoredUser = buildUser(accessToken, email);
+        if (!restoredUser) {
+          throw new Error("تعذر التحقق من بيانات الجلسة.");
+        }
+
         if (isMounted) {
-          setUser(buildUser(accessToken, tokenStore.getEmail()));
+          setUser(restoredUser);
         }
       })
       .catch(() => {
@@ -149,3 +164,5 @@ export function useAuth() {
 
   return context;
 }
+
+

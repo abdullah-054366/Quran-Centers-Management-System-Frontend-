@@ -2,7 +2,8 @@ import axios from "axios";
 
 // عنوان الـ API الأساسي (بدون /api وبدون مسار الدخول)
 // في Vite: أنشئ ملف .env.local وضع فيه: VITE_API_URL=https://localhost:7171
-const API_URL = import.meta.env.VITE_API_URL ?? "https://localhost:7171";
+const API_ORIGIN = (import.meta.env.VITE_API_URL ?? "https://localhost:7171").replace(/\/+$/, "");
+const API_URL = /\/api$/i.test(API_ORIGIN) ? API_ORIGIN : `${API_ORIGIN}/api`;
 
 const REFRESH_KEY = "halaqa_refresh_token";
 const EMAIL_KEY = "halaqa_email";
@@ -83,7 +84,7 @@ export function getErrorMessage(error) {
 }
 
 export const api = axios.create({
-  baseURL: `${API_URL}/api`,
+  baseURL: `${API_URL}/`,
   headers: { "Content-Type": "application/json" },
   timeout: 15000,
 });
@@ -113,7 +114,7 @@ export function refreshSession() {
 
   // نستخدم axios مباشرة (وليس api) لتجنب حلقة لا نهائية في الـ interceptor
   refreshPromise = axios
-    .post(`${API_URL}/api/Auth/refresh`, { email, refreshToken })
+    .post(`${API_URL}/Auth/refresh`, { email, refreshToken })
     .then(({ data }) => {
       const tokens = normalizeTokens(data);
       tokenStore.set({ ...tokens, email });
@@ -149,3 +150,4 @@ api.interceptors.response.use(
     return Promise.reject(error);
   },
 );
+
