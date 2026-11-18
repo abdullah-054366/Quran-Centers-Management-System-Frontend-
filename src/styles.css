@@ -11,3 +11,98 @@
 .scrollbar-hide::-webkit-scrollbar {
   display: none;
 }
+
+@media print {
+  @page { size: A4 portrait; margin: 12mm; }
+  body { background: #fff !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  tr { break-inside: avoid; }
+  thead { display: table-header-group; }
+
+  /* سجل الشهر كاملاً في صفحة A4 واحدة */
+  .print-one-page { break-inside: avoid; page-break-inside: avoid; }
+  .print-compact { font-size: 10px !important; line-height: 1.25 !important; }
+  .print-compact th, .print-compact td { padding: 2px 4px !important; }
+  .print-compact .rounded-full { min-width: 0 !important; padding: 0 6px !important; font-size: 9px !important; }
+}
+
+
+/* ───── الوضع الليلي: تعويض على فئات Tailwind الفاتحة الشائعة ───── */
+html.dark { color-scheme: dark; background: #0c1411; }
+html.dark body, html.dark :root { background: #0c1411; color: #e2e8f0; }
+html.dark .bg-white { background-color: #15201b !important; }
+html.dark .bg-slate-50, html.dark .bg-\[\#f6f8f6\] { background-color: #0f1915 !important; }
+html.dark .bg-slate-100 { background-color: #1d2a24 !important; }
+html.dark .hover\:bg-slate-50:hover, html.dark .hover\:bg-slate-100:hover { background-color: #1d2a24 !important; }
+html.dark .bg-emerald-50, html.dark .hover\:bg-emerald-50:hover { background-color: #12291f !important; }
+html.dark .bg-rose-50 { background-color: #2c1518 !important; }
+html.dark .bg-amber-50 { background-color: #2b2410 !important; }
+html.dark .bg-sky-50 { background-color: #10222d !important; }
+html.dark .text-slate-900, html.dark .text-slate-800, html.dark .text-ink { color: #f1f5f9 !important; }
+html.dark .text-slate-700, html.dark .text-slate-600 { color: #cbd5e1 !important; }
+html.dark .text-slate-500 { color: #a3b1bf !important; }
+html.dark .text-slate-400 { color: #8494a5 !important; }
+html.dark .text-emerald-900, html.dark .text-emerald-800 { color: #6ee7b7 !important; }
+html.dark .text-rose-700 { color: #fda4af !important; }
+html.dark .text-amber-700 { color: #fcd34d !important; }
+html.dark .text-sky-700 { color: #7dd3fc !important; }
+html.dark .border-slate-100, html.dark .border-slate-200, html.dark .border-slate-300, html.dark .border-t, html.dark .border-b { border-color: #26352d !important; }
+html.dark input, html.dark select, html.dark textarea { background-color: #0f1915; color: #e2e8f0; border-color: #2a3b32; }
+html.dark ::placeholder { color: #6b7c8c; }
+
+/* dark v2: ألوان إضافية لم تكن مغطاة */
+html.dark .text-emerald-700, html.dark .hover\:text-emerald-700:hover, html.dark .hover\:text-emerald-800:hover { color: #34d399 !important; }
+html.dark .text-emerald-100, html.dark .text-emerald-50\/80 { color: #d1fae5; }
+html.dark .text-rose-600 { color: #fb7185 !important; }
+html.dark .text-red-700 { color: #fca5a5 !important; }
+html.dark .text-sky-800 { color: #bae6fd !important; }
+html.dark .text-amber-800 { color: #fde68a !important; }
+html.dark .text-violet-700 { color: #c4b5fd !important; }
+html.dark .text-slate-300 { color: #64748b !important; }
+html.dark .bg-red-50 { background-color: #2c1518 !important; }
+html.dark .bg-violet-50 { background-color: #1f1a33 !important; }
+html.dark .bg-emerald-50\/60 { background-color: #10241b !important; }
+html.dark .bg-slate-50\/70, html.dark .hover\:bg-slate-50\/60:hover { background-color: #121d18 !important; }
+html.dark .hover\:bg-white:hover { background-color: #1d2a24 !important; }
+html.dark .hover\:bg-rose-50:hover { background-color: #3a1a1e !important; }
+html.dark .divide-slate-100 > :not([hidden]) ~ :not([hidden]),
+html.dark .divide-slate-200 > :not([hidden]) ~ :not([hidden]) { border-color: #26352d !important; }
+html.dark .border-emerald-100, html.dark .border-emerald-200 { border-color: #1f4a37 !important; }
+html.dark .border-rose-100, html.dark .border-rose-200 { border-color: #5a2a30 !important; }
+html.dark .border-amber-200 { border-color: #5a4a1c !important; }
+html.dark .border-sky-200 { border-color: #1f4558 !important; }
+html.dark .border-slate-400 { border-color: #3d5046 !important; }
+/* ورقة السجل الكريمية */
+html.dark .bg-\[\#fffef9\], html.dark .bg-\[\#fffdf4\] { background-color: #1a1f17 !important; }
+html.dark .border-\[\#d7c88c\], html.dark .border-\[\#e1d8b4\] { border-color: #4a4527 !important; }
+html.dark .text-\[\#8b7840\], html.dark .text-\[\#9b8953\], html.dark .text-\[\#796b43\],
+html.dark .text-\[\#76642f\], html.dark .text-\[\#655a39\], html.dark .text-\[\#c8b66c\] { color: #d9c982 !important; }
+html.dark .text-\[\#A4452C\] { color: #f08a6e !important; }
+html.dark .text-emerald-800\/65, html.dark .text-emerald-800\/60, html.dark .text-emerald-800\/40 { color: #6ee7b7 !important; opacity: .75; }
+/* حقول النموذج والقوائم */
+html.dark select option { background-color: #15201b; color: #e2e8f0; }
+html.dark code.bg-slate-100 { color: #f1f5f9; }
+html.dark table { color: inherit; }
+html.dark ::selection { background: #065f46; color: #fff; }
+/* الطباعة تبقى فاتحة دائماً */
+@media print {
+  html.dark, html.dark body { background: #fff !important; color: #000 !important; }
+  html.dark .bg-white, html.dark .bg-slate-50, html.dark .bg-slate-100 { background-color: #fff !important; }
+  html.dark .text-slate-900, html.dark .text-slate-800, html.dark .text-slate-700, html.dark .text-slate-600,
+  html.dark .text-slate-500, html.dark .text-slate-400, html.dark .text-emerald-800 { color: #000 !important; }
+  html.dark .border-slate-100, html.dark .border-slate-200 { border-color: #ccc !important; }
+}
+
+/* dark v3: الشريط العلوي وصفحة الحضور */
+html.dark .bg-white\/90 { background-color: rgba(21, 32, 27, 0.9) !important; }
+html.dark .border-slate-200\/70 { border-color: #26352d !important; }
+html.dark header h1 { color: #f1f5f9; }
+html.dark .bg-\[\#fcfaef\] { background-color: #1a1f17 !important; }
+html.dark .bg-\[\#f7f1dc\], html.dark .bg-\[\#f6f0d9\], html.dark .bg-\[\#f4edcf\] { background-color: #262a1a !important; }
+html.dark .border-\[\#e3d9b3\], html.dark .border-\[\#d9cd91\], html.dark .border-\[\#c8b66c\] { border-color: #4a4527 !important; }
+html.dark .text-\[\#806d34\], html.dark .text-\[\#75612b\], html.dark .text-\[\#5c512f\] { color: #e6d78f !important; }
+html.dark .hover\:border-emerald-300:hover { border-color: #2f7a5a !important; }
+html.dark .bg-emerald-50\/70 { background-color: #10241b !important; }
+html.dark .disabled\:bg-slate-50:disabled { background-color: #121d18 !important; }
+html.dark .hover\:bg-sky-50:hover { background-color: #12303f !important; }
+html.dark .hover\:bg-amber-50:hover { background-color: #33290f !important; }
+html.dark .shadow-sm, html.dark .shadow-soft { box-shadow: 0 1px 2px rgba(0,0,0,.5); }

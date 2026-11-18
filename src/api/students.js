@@ -1,4 +1,4 @@
-import api from "./api";
+import { api } from "./axiosClient";
 
 const STUDENTS_ENDPOINT = "/Students";
 

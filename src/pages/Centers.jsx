@@ -1,5 +1,18 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { addCenter as addCenterApi, getCenters, updateCenter } from '../api/centers'
+import { Link } from 'react-router'
+import { FileSpreadsheet } from 'lucide-react'
+import {
+  addCenter as addCenterApi,
+  deleteCenter,
+  getCenterDeletionSummary,
+  getCenters,
+  regenerateCenterCode,
+  renameCenter,
+  updateCenter,
+} from '../api/centers'
+import { apiErrorMessage } from '../lib/apiError'
+import { buildXlsxBlob, downloadBlob } from '../lib/xlsx'
+import { ConfirmModal, ErrorNote, Modal, fieldClass, ghostBtn, primaryBtn } from '../components/AdminUi'
 
 
 
@@ -10,12 +23,6 @@ const makeCode = () => {
 
 const fmtDate = (d) =>
   new Date(d).toLocaleDateString('ar-SA', { year: 'numeric', month: 'short', day: 'numeric' })
-
-const DEMO = [
-  { centerId: 1, centerName: 'مركز النور لتحفيظ القرآن', centerCode: 'NOOR7K', codeEnabled: true, isActive: true, createdAt: '2026-10-25T20:31:17.096511' },
-  { centerId: 2, centerName: 'مركز الفرقان', centerCode: 'FRQN2M', codeEnabled: true, isActive: true, createdAt: '2026-09-02T09:10:00' },
-  { centerId: 3, centerName: 'مركز التقوى', centerCode: 'TQWA9X', codeEnabled: false, isActive: false, createdAt: '2026-07-21T14:00:00' },
-]
 
 function Switch({ checked, onChange, label }) {
   return (
@@ -118,15 +125,129 @@ function AddCenterModal({ onClose, onSave, saving }) {
   )
 }
 
+function RenameModal({ center, onClose, onSave, saving, error }) {
+  const [name, setName] = useState(center.centerName)
+  const submit = (e) => {
+    e.preventDefault()
+    if (name.trim()) onSave(name.trim())
+  }
+  return (
+    <Modal title="تعديل اسم المركز" onClose={onClose} busy={saving}>
+      <form onSubmit={submit}>
+        <label className="text-sm font-medium text-slate-700">
+          اسم المركز
+          <input autoFocus value={name} maxLength={150} onChange={(e) => setName(e.target.value)} className={fieldClass} />
+        </label>
+        <ErrorNote>{error}</ErrorNote>
+        <div className="mt-5 flex justify-end gap-2">
+          <button type="button" onClick={onClose} disabled={saving} className={ghostBtn}>إلغاء</button>
+          <button type="submit" disabled={saving || !name.trim() || name.trim() === center.centerName} className={primaryBtn}>
+            {saving ? 'جارٍ الحفظ…' : 'حفظ'}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  )
+}
+
+function DeleteCenterModal({ center, onClose, onDeleted, onSuspend }) {
+  const [summary, setSummary] = useState(null)
+  const [typed, setTyped] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    let alive = true
+    getCenterDeletionSummary(center.centerId)
+      .then((data) => alive && setSummary(data))
+      .catch((err) => alive && setError(apiErrorMessage(err, 'تعذّر جلب بيانات المركز.')))
+    return () => {
+      alive = false
+    }
+  }, [center.centerId])
+
+  const confirm = async () => {
+    setBusy(true)
+    setError('')
+    try {
+      await deleteCenter(center.centerId)
+      onDeleted(center)
+    } catch (err) {
+      setError(apiErrorMessage(err))
+      setBusy(false)
+    }
+  }
+
+  const rows = summary
+    ? [
+        ['الطلاب', summary.students],
+        ['المعلمون', summary.teachers],
+        ['الحلقات', summary.halaqat],
+        ['الحسابات', summary.users],
+        ['سجلات الحضور', summary.attendanceRecords],
+        ['سجلات الحفظ', summary.memorizationRecords],
+        ['الخطط', summary.plans],
+      ]
+    : []
+
+  return (
+    <ConfirmModal
+      title={`حذف ${center.centerName}`}
+      danger
+      confirmLabel="حذف نهائي"
+      busy={busy}
+      error={error}
+      disabled={!summary || !summary.canDelete || typed.trim() !== center.centerName}
+      onClose={() => !busy && onClose()}
+      onConfirm={confirm}
+    >
+      {!summary ? (
+        <p>جارٍ فحص بيانات المركز…</p>
+      ) : (
+        <>
+          <ul className="grid grid-cols-2 gap-2">
+            {rows.map(([label, value]) => (
+              <li key={label} className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
+                <span>{label}</span>
+                <strong className={value ? 'text-rose-700' : 'text-slate-400'}>{value}</strong>
+              </li>
+            ))}
+          </ul>
+          {summary.canDelete ? (
+            <label className="block text-sm font-medium text-slate-700">
+              اكتب اسم المركز للتأكيد
+              <input value={typed} onChange={(e) => setTyped(e.target.value)} className={fieldClass} placeholder={center.centerName} />
+            </label>
+          ) : (
+            <div className="space-y-2 rounded-xl bg-amber-50 p-3 text-amber-800">
+              <p>لا يمكن حذف مركز يحتوي بيانات. الحل الآمن هو <strong>إيقاف المركز</strong>: يبقى كل شيء محفوظاً ولا يستطيع أحد استخدامه.</p>
+              {center.isActive && (
+                <button type="button" onClick={() => onSuspend(center)} className="rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-700">
+                  إيقاف المركز الآن
+                </button>
+              )}
+            </div>
+          )}
+        </>
+      )}
+    </ConfirmModal>
+  )
+}
+
 function Centers() {
   const [centers, setCenters] = useState([])
   const [loading, setLoading] = useState(true)
-  const [offline, setOffline] = useState(false)
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState('all') // all | active | suspended
   const [showAdd, setShowAdd] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [notice, setNotice] = useState('')
+  const [rename, setRename] = useState(null)
+  const [renameError, setRenameError] = useState('')
+  const [codeTarget, setCodeTarget] = useState(null)
+  const [codeError, setCodeError] = useState('')
+  const [deleting, setDeleting] = useState(null)
 
 
   async function fetchCenters() {
@@ -134,12 +255,12 @@ function Centers() {
    
      const data = await getCenters()
      setCenters(data)
-     setOffline(false)
+     setError('')
 
     }catch (error) {
       console.error("Error fetching centers:", error)
-      setCenters(DEMO)
-      setOffline(true)
+      setCenters([])
+      setError('تعذّر تحميل المراكز. تحقق من اتصال الخادم ثم أعد المحاولة.')
     } finally {
       setLoading(false)
     }
@@ -179,7 +300,6 @@ function Centers() {
     const patch = (value) =>
       setCenters((list) => list.map((c) => (c.centerId === center.centerId ? { ...c, [field]: value } : c)))
     patch(next)
-    if (offline) return
     try {
       await updateCenter(center.centerId, field, next)
     } catch {
@@ -188,16 +308,64 @@ function Centers() {
     }
   }
 
+  const replaceCenter = (updated) =>
+    setCenters((list) => list.map((c) => (c.centerId === updated.centerId ? { ...c, ...updated } : c)))
+
+  const saveRename = async (name) => {
+    setSaving(true)
+    setRenameError('')
+    try {
+      replaceCenter(await renameCenter(rename.centerId, name))
+      setRename(null)
+      setNotice('تم تعديل اسم المركز.')
+    } catch (err) {
+      setRenameError(apiErrorMessage(err))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const confirmRegenerate = async () => {
+    setSaving(true)
+    setCodeError('')
+    try {
+      replaceCenter(await regenerateCenterCode(codeTarget.centerId))
+      setCodeTarget(null)
+      setNotice('تم توليد كود انضمام جديد. الكود القديم لم يعد يعمل.')
+    } catch (err) {
+      setCodeError(apiErrorMessage(err))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const suspendFromDelete = async (center) => {
+    setDeleting(null)
+    await toggle(center, 'isActive')
+  }
+
+  const exportExcel = () => {
+    const rows = [
+      [{ v: 'المركز', b: true }, { v: 'الكود', b: true }, { v: 'الكود مفعّل', b: true }, { v: 'الحالة', b: true }, { v: 'تاريخ التسجيل', b: true }],
+      ...visible.map((c) => [
+        c.centerName,
+        c.centerCode,
+        c.codeEnabled ? 'نعم' : 'لا',
+        c.isActive ? 'نشط' : 'موقوف',
+        c.createdAt ? String(c.createdAt).slice(0, 10) : '',
+      ]),
+    ]
+    downloadBlob(
+      buildXlsxBlob({ sheetName: 'المراكز', rows, colWidths: [30, 12, 12, 10, 14] }),
+      `المراكز ${new Date().toISOString().slice(0, 10)}.xlsx`,
+    )
+  }
+
   const addCenter = async (payload) => {
     setSaving(true)
     setError('')
     try {
-      let created
-      if (offline) {
-        created = { centerId: Date.now(), codeEnabled: true, isActive: true, createdAt: new Date().toISOString(), ...payload }
-      } else {
-        created = await addCenterApi(payload)
-      }
+      const created = await addCenterApi(payload)
       setCenters((list) => [created, ...list])
       setShowAdd(false)
     } catch {
@@ -225,12 +393,21 @@ function Centers() {
               تابع المراكز المسجّلة في مشكاة، وفعّل أو أوقف أي مركز يدوياً.
             </p>
           </div>
-          <button
-            onClick={() => setShowAdd(true)}
-            className="rounded-xl bg-emerald-800 px-5 py-2.5 text-sm font-semibold text-white hover:bg-[#0f766e] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600"
-          >
-            إضافة مركز
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={exportExcel}
+              disabled={!visible.length}
+              className="flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-medium text-emerald-800 hover:bg-slate-50 disabled:opacity-50"
+            >
+              <FileSpreadsheet size={16} /> تصدير Excel
+            </button>
+            <button
+              onClick={() => setShowAdd(true)}
+              className="rounded-xl bg-emerald-800 px-5 py-2.5 text-sm font-semibold text-white hover:bg-[#0f766e] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600"
+            >
+              إضافة مركز
+            </button>
+          </div>
         </header>
 
         <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
@@ -257,11 +434,10 @@ function Centers() {
           />
         </div>
 
-        {offline && (
-          <p className="mb-4 rounded-lg bg-amber-50 px-4 py-2.5 text-sm text-amber-800">
-            تعذّر الاتصال بالخادم، فتُعرض بيانات تجريبية. التغييرات هنا لا تُحفظ.
-          </p>
+        {notice && (
+          <p role="status" className="mb-4 rounded-lg bg-emerald-50 px-4 py-2.5 text-sm text-emerald-800">{notice}</p>
         )}
+
         {error && (
           <p role="alert" className="mb-4 rounded-lg bg-[#A4452C]/10 px-4 py-2.5 text-sm text-[#A4452C]">
             {error}
@@ -289,7 +465,9 @@ function Centers() {
                     className={`mt-2 h-2.5 w-2.5 shrink-0 rounded-full ${c.isActive ? 'bg-emerald-600' : 'bg-[#A4452C]'}`}
                   />
                   <div className="min-w-0">
-                    <h3 className="mk-head truncate text-base font-bold">{c.centerName}</h3>
+                    <h3 className="mk-head truncate text-base font-bold">
+                      <Link to={`/centers/${c.centerId}`} className="hover:text-emerald-600 hover:underline">{c.centerName}</Link>
+                    </h3>
                     <p className="mt-1 text-sm text-emerald-800/65">سُجّل في {fmtDate(c.createdAt)}</p>
                   </div>
                 </div>
@@ -318,11 +496,52 @@ function Centers() {
                     {c.isActive ? 'نشط' : 'موقوف'}
                   </span>
                 </div>
+
+                {/* إجراءات */}
+                <div className="flex flex-wrap items-center gap-1 text-xs font-semibold">
+                  <Link to={`/centers/${c.centerId}`} className="rounded-lg px-2.5 py-1.5 text-emerald-800 hover:bg-emerald-50">التفاصيل</Link>
+                  <button type="button" onClick={() => { setRenameError(''); setRename(c) }} className="rounded-lg px-2.5 py-1.5 text-slate-600 hover:bg-slate-100">تعديل الاسم</button>
+                  <button type="button" onClick={() => { setCodeError(''); setCodeTarget(c) }} className="rounded-lg px-2.5 py-1.5 text-slate-600 hover:bg-slate-100">كود جديد</button>
+                  <button type="button" onClick={() => setDeleting(c)} className="rounded-lg px-2.5 py-1.5 text-rose-600 hover:bg-rose-50">حذف</button>
+                </div>
               </li>
             ))}
           </ul>
         )}
       </div>
+
+      {rename && (
+        <RenameModal center={rename} onClose={() => !saving && setRename(null)} onSave={saveRename} saving={saving} error={renameError} />
+      )}
+
+      {codeTarget && (
+        <ConfirmModal
+          title="توليد كود انضمام جديد"
+          confirmLabel="توليد كود جديد"
+          busy={saving}
+          error={codeError}
+          onClose={() => !saving && setCodeTarget(null)}
+          onConfirm={confirmRegenerate}
+        >
+          <p>
+            سيُستبدل كود <strong dir="ltr">{codeTarget.centerCode}</strong> الخاص بـ <strong>{codeTarget.centerName}</strong> بكود جديد عشوائي.
+            الطلاب المسجّلون لا يتأثرون، لكن الكود القديم سيتوقف عن العمل فوراً.
+          </p>
+        </ConfirmModal>
+      )}
+
+      {deleting && (
+        <DeleteCenterModal
+          center={deleting}
+          onClose={() => setDeleting(null)}
+          onSuspend={suspendFromDelete}
+          onDeleted={(center) => {
+            setCenters((list) => list.filter((c) => c.centerId !== center.centerId))
+            setDeleting(null)
+            setNotice('تم حذف المركز.')
+          }}
+        />
+      )}
 
       {showAdd && <AddCenterModal onClose={() => setShowAdd(false)} onSave={addCenter} saving={saving} />}
     </div>

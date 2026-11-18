@@ -6,11 +6,14 @@ const titles = {
   "/": "الرئيسية",
   "/student": "ملفي وجدول الحفظ",
   "/centers": "المراكز",
+  "/users": "المستخدمون",
+  "/audit": "سجل التدقيق",
   "/groups": "الحلقات",
   "/students": "الطلاب",
   "/teachers": "المدرسون",
   "/attendance": "الحضور والغياب",
   "/plans": "خطط الحفظ",
+  "/settings": "الإعدادات",
 };
 
 export default function Header({ onMenuClick }) {
@@ -25,7 +28,7 @@ export default function Header({ onMenuClick }) {
   };
 
   return (
-    <header className="sticky top-0 z-20 flex h-[76px] items-center justify-between border-b border-slate-200/70 bg-white/90 px-4 backdrop-blur md:px-8">
+    <header className="sticky top-0 z-20 print:hidden flex h-[76px] items-center justify-between border-b border-slate-200/70 bg-white/90 px-4 backdrop-blur md:px-8">
       <div className="flex items-center gap-3">
         <h1 className="text-lg font-extrabold">{title}</h1>
       </div>

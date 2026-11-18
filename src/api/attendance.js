@@ -1,10 +1,11 @@
-import api from "./api";
+import { api } from "./axiosClient";
 
 const ATTENDANCE_ENDPOINT = "/Attendance";
 
-export const getAttendance = async () => {
+// params اختيارية: { halaqaId, from: "YYYY-MM-DD", to: "YYYY-MM-DD" }
+export const getAttendance = async (params = {}) => {
   try {
-    const response = await api.get(`${ATTENDANCE_ENDPOINT}/All`);
+    const response = await api.get(`${ATTENDANCE_ENDPOINT}/All`, { params });
     return response.data;
   } catch (error) {
     console.error("Error fetching attendance:", error);

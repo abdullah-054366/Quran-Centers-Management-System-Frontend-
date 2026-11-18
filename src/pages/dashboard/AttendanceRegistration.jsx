@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router";
-import { ArrowRight, Check, CheckCheck, CircleAlert, Users } from "lucide-react";
-import { getCenters } from "../../api/centers";
+import { Check, CheckCheck, CircleAlert, Users } from "lucide-react";
 import { getAttendance, getAttendanceHalaqas, getStudentsByHalaqa, saveAttendance } from "../../api/attendance";
+import { getErrorMessage } from "../../api/axiosClient";
 import { useAuth } from "../../context/AuthContext";
 
 const statuses = [
@@ -24,12 +23,10 @@ function asList(data) {
 
 export default function AttendanceRegistration() {
   const { user } = useAuth();
-  const recorderId = Number(user?.id);
+  // المسجِّل يُحدَّد في الخادم من التوكن، فلا حاجة لإرسال رقمه من الواجهة.
   const roleLabel = { platformadmin: "مسؤول المنصة", centeradmin: "مسؤول المركز", admin: "مسؤول المنصة", manager: "مسؤول المركز", teacher: "المعلم", student: "الطالب" }[String(user?.role || "").toLowerCase()] || user?.role || "غير معروف";
-  const [centers, setCenters] = useState([]);
   const [halaqas, setHalaqas] = useState([]);
   const [students, setStudents] = useState([]);
-  const [centerId] = useState("");
   const [halaqaId, setHalaqaId] = useState("");
   const [date, setDate] = useState(todayKey);
   const [statusByStudent, setStatusByStudent] = useState({});
@@ -39,28 +36,28 @@ export default function AttendanceRegistration() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  // تغييرات لم تُحفظ بعد، وعدّاد لإعادة التحميل من الخادم بعد الحفظ.
+  const [dirty, setDirty] = useState(false);
+  const [reloadTick, setReloadTick] = useState(0);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const today = todayKey();
 
   useEffect(() => {
     let active = true;
-    Promise.all([getCenters(), getAttendanceHalaqas()])
-      .then(([centerData, halaqaData]) => {
+    getAttendanceHalaqas()
+      .then((halaqaData) => {
         if (!active) return;
-        const list = asList(centerData).filter((item) => item.isActive !== false);
-        setCenters(list);
         setHalaqas(asList(halaqaData));
       })
       .catch((requestError) => {
-        console.error("Error loading attendance options:", requestError);
-        if (active) setError("تعذّر تحميل المراكز والحلقات.");
+        console.error("Error loading attendance halaqas:", requestError);
+        if (active) setError(getErrorMessage(requestError) || "تعذّر تحميل الحلقات المسموح بها لحسابك.");
       })
       .finally(() => { if (active) setLoadingOptions(false); });
     return () => { active = false; };
   }, []);
 
-  const availableHalaqas = useMemo(
-    () => halaqas.filter((item) => String(item.centerId) === centerId),
-    [halaqas, centerId],
-  );
+  const availableHalaqas = useMemo(() => halaqas, [halaqas]);
 
   useEffect(() => {
     if (!availableHalaqas.some((item) => String(item.halaqaId) === halaqaId)) {
@@ -68,36 +65,71 @@ export default function AttendanceRegistration() {
     }
   }, [availableHalaqas, halaqaId]);
 
+  // تحميل طلاب الحلقة وحضور هذا اليوم فقط (وليس كل السجلات).
   useEffect(() => {
     let active = true;
-    if (!halaqaId) {
+    if (!halaqaId || !date) {
       setStudents([]);
       setStatusByStudent({});
       setNotesByStudent({});
+      setDirty(false);
       return undefined;
     }
 
     setLoadingStudents(true);
-    setError("");
-    setNotice("");
-    Promise.all([getStudentsByHalaqa(halaqaId), getAttendance().catch(() => [])])
+    setLoadFailed(false);
+    Promise.all([getStudentsByHalaqa(halaqaId), getAttendance({ halaqaId, from: date, to: date })])
       .then(([rosterData, attendanceData]) => {
         if (!active) return;
-        const roster = asList(rosterData);
         const existing = asList(attendanceData).filter((record) =>
           String(record.halaqaId) === halaqaId && String(record.attendanceDate).slice(0, 10) === date,
         );
-        setStudents(roster);
+        setStudents(asList(rosterData));
         setStatusByStudent(Object.fromEntries(existing.map((record) => [record.studentId, Number(record.status)])));
         setNotesByStudent(Object.fromEntries(existing.map((record) => [record.studentId, record.notes || ""])));
+        setDirty(false);
       })
       .catch((requestError) => {
         console.error("Error loading halaqa students:", requestError);
-        if (active) { setStudents([]); setError("تعذّر تحميل قائمة طلاب الحلقة."); }
+        if (!active) return;
+        setStudents([]);
+        setStatusByStudent({});
+        setNotesByStudent({});
+        setLoadFailed(true);
+        // لا نسمح بالحفظ بعد فشل التحميل حتى لا نكتب فوق سجلات موجودة دون علم المعلم.
+        setError(`تعذّر تحميل طلاب الحلقة أو حضور هذا اليوم: ${getErrorMessage(requestError)}`);
       })
       .finally(() => { if (active) setLoadingStudents(false); });
     return () => { active = false; };
-  }, [halaqaId, date]);
+  }, [halaqaId, date, reloadTick]);
+
+  function confirmDiscard() {
+    return !dirty || window.confirm("لديك تغييرات لم تُحفظ. هل تريد تجاهلها والمتابعة؟");
+  }
+
+  function changeHalaqa(value) {
+    if (value === halaqaId || !confirmDiscard()) return;
+    setError("");
+    setNotice("");
+    setHalaqaId(value);
+  }
+
+  function changeDate(value) {
+    if (!value || value === date || !confirmDiscard()) return;
+    setError("");
+    setNotice("");
+    setDate(value);
+  }
+
+  function setStatus(studentId, status) {
+    setStatusByStudent((current) => ({ ...current, [studentId]: status }));
+    setDirty(true);
+  }
+
+  function setNote(studentId, value) {
+    setNotesByStudent((current) => ({ ...current, [studentId]: value }));
+    setDirty(true);
+  }
 
   const counts = useMemo(() => {
     const result = Object.fromEntries(statuses.map((item) => [item.id, 0]));
@@ -113,19 +145,28 @@ export default function AttendanceRegistration() {
 
   function markAllPresent() {
     setStatusByStudent(Object.fromEntries(students.map((student) => [student.studentId, 1])));
+    setDirty(true);
   }
 
   async function handleSave() {
     setError("");
     setNotice("");
-    if (!Number.isInteger(recorderId) || recorderId <= 0) {
-      setError("تعذّر تحديد حساب المستخدم المسجل. سجّل الدخول من جديد.");
+
+    if (loadFailed) {
+      setError("لم يكتمل تحميل بيانات الحلقة. أعد تحميل الصفحة قبل الحفظ.");
       return;
     }
+
+    if (!date || date > today) {
+      setError("اختر تاريخاً صحيحاً لا يتجاوز اليوم.");
+      return;
+    }
+
     if (!allMarked) {
       setError("حدّد حالة كل طالب قبل الحفظ.");
       return;
     }
+
     const halaqa = availableHalaqas.find((item) => String(item.halaqaId) === halaqaId);
     if (!halaqa) {
       setError("اختر الحلقة أولاً.");
@@ -141,13 +182,15 @@ export default function AttendanceRegistration() {
         attendanceDate: date,
         status: statusByStudent[student.studentId],
         notes: notesByStudent[student.studentId]?.trim() || null,
-        recordedByUserId: recorderId,
       }));
+
       const result = await saveAttendance(payload);
-      setNotice(`تم حفظ حضور ${result?.savedCount ?? payload.length} طالباً.`);
+      setNotice(`تم حفظ حضور ${result?.savedCount ?? payload.length} طالباً بتاريخ ${date}.`);
+      setDirty(false);
+      setReloadTick((tick) => tick + 1); // نعيد القراءة من الخادم للتأكد مما حُفظ
     } catch (requestError) {
       console.error("Error saving attendance:", requestError);
-      setError("تعذّر حفظ الحضور. تحقّق من البيانات ثم حاول مرة أخرى.");
+      setError(getErrorMessage(requestError));
     } finally {
       setSaving(false);
     }
@@ -156,20 +199,28 @@ export default function AttendanceRegistration() {
   return (
     <main dir="rtl" className="mx-auto max-w-5xl space-y-6 pb-28">
       <header>
-        <Link to="/attendance" className="mb-2 inline-flex items-center gap-1 text-xs font-bold text-slate-400 hover:text-emerald-800"><ArrowRight size={15} />سجل الحضور</Link>
         <h1 className="text-2xl font-extrabold text-slate-800">تسجيل الحضور</h1>
-        <p className="mt-1 text-sm text-slate-400">سيتم تحديد الحلقة المرتبطة بحسابك حسب نوع تسجيل الدخول.</p>
+        <p className="mt-1 text-sm text-slate-400">تُعرض الحلقات المسموح بها لحسابك؛ اختر الحلقة لتسجيل حضور طلابها.</p>
       </header>
 
-      <section className="grid gap-4 rounded-2xl border border-slate-100 bg-white p-4 shadow-sm sm:grid-cols-2 sm:p-5">
+      <section className="grid gap-4 rounded-2xl border border-slate-100 bg-white p-4 shadow-sm sm:grid-cols-2 sm:p-5 xl:grid-cols-3">
         <div className="rounded-xl bg-emerald-50/70 p-4">
           <p className="text-xs font-bold text-slate-400">نوع الحساب</p>
           <p className="mt-1 font-extrabold text-emerald-900">{roleLabel}</p>
-          <p className="mt-2 text-xs leading-6 text-slate-500">سيتم تحديد المركز والحلقة تلقائياً حسب نوع تسجيل الدخول.</p>
-          {!loadingOptions && <p className="mt-1 text-[11px] text-amber-700">ربط نطاق الحساب بالمركز والحلقة لم يُفعّل بعد.</p>}
+          <p className="mt-2 text-xs leading-6 text-slate-500">قائمة الحلقات مقيّدة بصلاحيات حسابك.</p>
         </div>
+        <label className="text-sm font-bold text-slate-700">الحلقة
+          <select value={halaqaId} onChange={(event) => changeHalaqa(event.target.value)} disabled={loadingOptions || availableHalaqas.length === 0} className="mt-2 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-emerald-700 disabled:bg-slate-50">
+            <option value="">{loadingOptions ? "جارٍ تحميل الحلقات…" : "اختر الحلقة"}</option>
+            {availableHalaqas.map((item) => (
+              <option key={item.halaqaId} value={item.halaqaId}>
+                {item.halaqaName}{item.centerName ? ` — ${item.centerName}` : ""}
+              </option>
+            ))}
+          </select>
+        </label>
         <label className="text-sm font-bold text-slate-700">تاريخ التسجيل
-          <input type="date" value={date} onChange={(event) => setDate(event.target.value)} className="mt-2 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-emerald-700" />
+          <input type="date" value={date} max={today} required onChange={(event) => changeDate(event.target.value)} className="mt-2 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-emerald-700" />
         </label>
       </section>
 
@@ -187,15 +238,15 @@ export default function AttendanceRegistration() {
           <span className="mr-auto rounded-full bg-white px-3 py-1.5 text-xs font-bold text-slate-500">غير محدد <b className="text-slate-700">{students.length - markedCount}</b></span>
         </div>
 
-        {loadingStudents ? <p className="p-10 text-center text-sm text-slate-400">جارٍ تحميل طلاب الحلقة…</p> : !students.length ? <p className="p-10 text-center text-sm text-slate-400">سيظهر طلاب الحلقة بعد ربط نطاق الحساب بالمركز والحلقة.</p> : (
+        {loadingStudents ? <p className="p-10 text-center text-sm text-slate-400">جارٍ تحميل طلاب الحلقة…</p> : !students.length ? <p className="p-10 text-center text-sm text-slate-400">اختر حلقة مسموحًا بها وبها طلاب نشطون لبدء التسجيل.</p> : (
           <div className="divide-y divide-slate-100">
             {students.map((student) => (
               <article key={student.studentId} className="grid gap-3 p-4 sm:p-5 lg:grid-cols-[minmax(160px,1fr)_auto_minmax(180px,0.8fr)] lg:items-center">
                 <div className="flex min-w-0 items-center gap-3"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-emerald-50 font-extrabold text-emerald-800">{student.studentName?.slice(0, 1) || "ط"}</span><div className="min-w-0"><p className="truncate text-sm font-bold text-slate-800">{student.studentName || "طالب"}</p><p className="mt-1 text-xs text-slate-400">رقم الطالب: {student.studentId}</p></div></div>
                 <div role="group" aria-label={`حالة حضور ${student.studentName}`} className="grid grid-cols-2 gap-1 rounded-xl bg-slate-50 p-1 sm:grid-cols-4">
-                  {statuses.map((item) => { const selected = statusByStudent[student.studentId] === item.id; return <button key={item.id} type="button" aria-pressed={selected} onClick={() => setStatusByStudent((current) => ({ ...current, [student.studentId]: item.id }))} className={`min-h-10 rounded-lg border border-transparent px-3 text-xs font-bold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-emerald-700 ${selected ? item.color : item.idle}`}>{item.name}</button>; })}
+                  {statuses.map((item) => { const selected = statusByStudent[student.studentId] === item.id; return <button key={item.id} type="button" aria-pressed={selected} onClick={() => setStatus(student.studentId, item.id)} className={`min-h-10 rounded-lg border border-transparent px-3 text-xs font-bold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-emerald-700 ${selected ? item.color : item.idle}`}>{item.name}</button>; })}
                 </div>
-                <label className="flex items-center gap-2 text-xs font-semibold text-slate-400"><span className="shrink-0">ملاحظة</span><input value={notesByStudent[student.studentId] || ""} onChange={(event) => setNotesByStudent((current) => ({ ...current, [student.studentId]: event.target.value }))} placeholder="اختيارية" className="min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm text-slate-700 outline-none placeholder:text-slate-300 focus:border-emerald-700" /></label>
+                <label className="flex items-center gap-2 text-xs font-semibold text-slate-400"><span className="shrink-0">ملاحظة</span><input value={notesByStudent[student.studentId] || ""} maxLength={500} onChange={(event) => setNote(student.studentId, event.target.value)} placeholder="اختيارية" className="min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm text-slate-700 outline-none placeholder:text-slate-300 focus:border-emerald-700" /></label>
               </article>
             ))}
           </div>
@@ -203,7 +254,7 @@ export default function AttendanceRegistration() {
       </section>
 
       <div className="sticky bottom-20 z-10 rounded-2xl border border-slate-200 bg-white/95 p-3 shadow-lg backdrop-blur lg:bottom-4">
-        <div className="flex flex-wrap items-center justify-between gap-3"><p className="text-sm text-slate-500">{students.length ? `${markedCount} من ${students.length} حالة محددة` : "لا يوجد طلاب"}</p><button type="button" onClick={handleSave} disabled={saving || loadingStudents || !students.length || !allMarked} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-emerald-800 px-5 py-2.5 text-sm font-extrabold text-white transition hover:bg-emerald-900 disabled:cursor-not-allowed disabled:opacity-50"><Check size={17} />{saving ? "جارٍ الحفظ…" : "حفظ الحضور"}</button></div>
+        <div className="flex flex-wrap items-center justify-between gap-3"><p className="text-sm text-slate-500">{students.length ? `${markedCount} من ${students.length} حالة محددة${dirty ? " · تغييرات غير محفوظة" : ""}` : "لا يوجد طلاب"}</p><button type="button" onClick={handleSave} disabled={saving || loadingStudents || loadFailed || !students.length || !allMarked} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-emerald-800 px-5 py-2.5 text-sm font-extrabold text-white transition hover:bg-emerald-900 disabled:cursor-not-allowed disabled:opacity-50"><Check size={17} />{saving ? "جارٍ الحفظ…" : "حفظ الحضور"}</button></div>
       </div>
     </main>
   );

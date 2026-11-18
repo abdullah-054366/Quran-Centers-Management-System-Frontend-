@@ -1,50 +1,19 @@
 import { NavLink } from "react-router";
 import { useAuth } from "../context/AuthContext";
-import {
-  BookOpen,
-  Building2,
-  CalendarCheck,
-  ClipboardList,
-  GraduationCap,
-  LayoutDashboard,
-  UserRound,
-  Users,
-} from "lucide-react";
+import { BookOpen } from "lucide-react";
+import { getNavLinks } from "../lib/navLinks";
 
-const links = [
-  { to: "/", label: "الرئيسية", icon: LayoutDashboard, end: true },
-  { to: "/student", label: "ملفي وجدول الحفظ", icon: BookOpen },
-  { to: "/groups", label: "الحلقات", icon: Users },
-  { to: "/teachers", label: "المدرسون", icon: UserRound },
-  { to: "/students", label: "الطلاب", icon: GraduationCap },
-  { to: "/attendance", label: "الحضور والغياب", icon: CalendarCheck },
-  { to: "/plans", label: "خطط الحفظ", icon: ClipboardList },
-];
-
-
-
-
+const ROLE_TITLES = {
+  PlatformAdmin: "مدير النظام",
+  Admin: "مدير النظام",
+  CenterAdmin: "مسؤول المركز",
+  Teacher: "معلم",
+  Student: "طالب",
+};
 
 export default function Sidebar({ open, onClose }) {
   const { user } = useAuth();
-
-  const visibleLinks = links.filter((l) => {
-    //صلاحيات مدير المنصة فقط
-  if (l.to === "/centers") return user?.role === "PlatformAdmin";
-
-  // المدرسون متاحون للمشرف ومدير المركز
-  if (l.to === "/teachers") return ["Admin", "CenterAdmin"].includes(user?.role);
-
-  //صلاحيات المديرين المركز
-  if (l.to === "/groups") return ["Admin", "CenterAdmin"].includes(user?.role);
-
-  // صلاحيات المدرسين
-
-
-  // صلاحيات الطلاب فقط
-  if (l.to === "/student") return user?.role === "Student";
-  return true;
-});
+  const visibleLinks = getNavLinks(user?.role);
 
   return (
     <aside
@@ -92,8 +61,8 @@ export default function Sidebar({ open, onClose }) {
       </nav>
 
       <div className="border-t p-4">
-        <p className="font-bold">محمد العتيبي</p>
-        <p className="mt-1 text-xs text-slate-400">مسؤول المركز</p>
+        <p className="truncate font-bold">{user?.fullName || user?.email}</p>
+        <p className="mt-1 text-xs text-slate-400">{ROLE_TITLES[user?.role] ?? ""}</p>
       </div>
     </aside>
   );

@@ -80,6 +80,11 @@ export function getErrorMessage(error) {
     }
     return data;
   }
+  // أخطاء التحقق من ASP.NET (400): نعرض أول رسالة بدل العنوان العام.
+  if (data?.errors && typeof data.errors === "object") {
+    const first = Object.values(data.errors).flat().find(Boolean);
+    if (first) return String(first);
+  }
   return data?.message || data?.title || "تعذر إكمال الطلب.";
 }
 
@@ -113,13 +118,25 @@ export function refreshSession() {
   }
 
   // نستخدم axios مباشرة (وليس api) لتجنب حلقة لا نهائية في الـ interceptor
-  refreshPromise = axios
-    .post(`${API_URL}/Auth/refresh`, { email, refreshToken })
-    .then(({ data }) => {
-      const tokens = normalizeTokens(data);
-      tokenStore.set({ ...tokens, email });
-      return tokens.accessToken;
-    })
+  const attempt = (token, canRetry) =>
+    axios
+      .post(`${API_URL}/Auth/refresh`, { email, refreshToken: token })
+      .then(({ data }) => {
+        const tokens = normalizeTokens(data);
+        tokenStore.set({ ...tokens, email });
+        return tokens.accessToken;
+      })
+      .catch((error) => {
+        // تبويب آخر جدّد الجلسة قبلنا (الـ Refresh يتغير مع كل تجديد):
+        // نعيد المحاولة مرة واحدة بالتوكن الأحدث بدل إخراج المستخدم.
+        const latest = tokenStore.getRefreshToken();
+        if (canRetry && error?.response?.status === 401 && latest && latest !== token) {
+          return attempt(latest, false);
+        }
+        throw error;
+      });
+
+  refreshPromise = attempt(refreshToken, true)
     .finally(() => {
       refreshPromise = null;
     });

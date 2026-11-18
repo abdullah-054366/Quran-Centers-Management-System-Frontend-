@@ -67,22 +67,22 @@ function getActionError(error) {
   return response?.message || response?.detail || "تعذّر إكمال العملية. حاول مرة أخرى.";
 }
 
-function TeacherFormModal({ teacher, onClose, onSave, saving, error }) {
+function TeacherFormModal({ teacher, centerId, isPlatformAdmin, onClose, onSave, saving, error }) {
   const [form, setForm] = useState({
     firstName: teacher?.firstName ?? "",
     lastName: teacher?.lastName ?? "",
     email: teacher?.email ?? "",
     phoneNumber: teacher?.phoneNumber === "—" ? "" : teacher?.phoneNumber ?? "",
     password: "",
-    centerId: "",
+    centerId: teacher?.centerId ?? centerId ?? "",
     isActive: teacher?.isActive ?? true,
   });
   const [centers, setCenters] = useState([]);
-  const [centersLoading, setCentersLoading] = useState(!teacher);
+  const [centersLoading, setCentersLoading] = useState(!teacher && isPlatformAdmin);
   const [centersError, setCentersError] = useState("");
 
   useEffect(() => {
-    if (teacher) return undefined;
+    if (teacher || !isPlatformAdmin) return undefined;
 
     let isMounted = true;
     getCenters()
@@ -102,7 +102,7 @@ function TeacherFormModal({ teacher, onClose, onSave, saving, error }) {
     return () => {
       isMounted = false;
     };
-  }, [teacher]);
+  }, [teacher, isPlatformAdmin]);
 
   const updateField = (event) => {
     const { name, value, type, checked } = event.target;
@@ -180,7 +180,7 @@ function TeacherFormModal({ teacher, onClose, onSave, saving, error }) {
             <input name="phoneNumber" type="tel" dir="ltr" value={form.phoneNumber} onChange={updateField} className={fieldClass} maxLength={20} />
           </label>
 
-          {!teacher && (
+          {!teacher && isPlatformAdmin && (
             <>
               <label className="text-sm font-semibold text-slate-700 sm:col-span-2">
                 المركز
@@ -192,12 +192,30 @@ function TeacherFormModal({ teacher, onClose, onSave, saving, error }) {
                 </select>
                 {centersError && <span className="mt-1 block text-xs text-rose-600">{centersError}</span>}
               </label>
-              <label className="text-sm font-semibold text-slate-700 sm:col-span-2">
-                كلمة المرور الأولية
-                <input name="password" type="password" autoComplete="new-password" value={form.password} onChange={updateField} className={fieldClass} required minLength={8} />
-                <span className="mt-1 block text-xs font-normal text-slate-400">ثمانية أحرف على الأقل.</span>
-              </label>
             </>
+          )}
+
+          {!teacher && (
+            <label className="text-sm font-semibold text-slate-700 sm:col-span-2">
+              كلمة المرور الأولية
+              <input name="password" type="password" autoComplete="new-password" value={form.password} onChange={updateField} className={fieldClass} required minLength={8} />
+              <span className="mt-1 block text-xs font-normal text-slate-400">ثمانية أحرف على الأقل.</span>
+            </label>
+          )}
+
+          {!teacher && !isPlatformAdmin && (
+            <div className="rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-800 sm:col-span-2">
+              سيتم إنشاء حساب المدرس وربطه بمركزك تلقائيًا.
+            </div>
+          )}
+
+          {teacher && (
+            <div className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-600 sm:col-span-2">
+              المركز: <span className="font-bold text-slate-800">{teacher.centerName}</span>
+              {teacher.centerCode && teacher.centerCode !== "—" && (
+                <span dir="ltr" className="mr-2 font-semibold text-emerald-800">({teacher.centerCode})</span>
+              )}
+            </div>
           )}
 
           <label className="flex cursor-pointer items-center gap-3 rounded-xl bg-slate-50 p-3 text-sm font-semibold text-slate-700 sm:col-span-2">
@@ -206,7 +224,7 @@ function TeacherFormModal({ teacher, onClose, onSave, saving, error }) {
           </label>
         </div>
 
-        {(error || (centers.length === 0 && !centersLoading && !teacher && !centersError)) && (
+        {(error || (isPlatformAdmin && centers.length === 0 && !centersLoading && !teacher && !centersError)) && (
           <p role="alert" className="mt-4 rounded-xl bg-rose-50 p-3 text-sm text-rose-700">
             {error || "لا توجد مراكز متاحة لإضافة المدرس."}
           </p>
@@ -215,7 +233,9 @@ function TeacherFormModal({ teacher, onClose, onSave, saving, error }) {
         <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row">
           <button
             type="submit"
-            disabled={saving || (!teacher && (centersLoading || !centers.length || !form.centerId))}
+            disabled={saving || (!teacher && (isPlatformAdmin
+              ? centersLoading || !centers.length || !form.centerId
+              : !centerId))}
             className="flex-1 rounded-xl bg-emerald-800 px-4 py-3 text-sm font-bold text-white transition hover:bg-emerald-900 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {saving ? "جارٍ الحفظ…" : teacher ? "حفظ التعديلات" : "إضافة المدرس"}
@@ -231,8 +251,9 @@ function TeacherFormModal({ teacher, onClose, onSave, saving, error }) {
 
 export default function Teachers() {
   const { user } = useAuth();
-  const canManageTeachers = ["Admin", "CenterAdmin"].includes(user?.role);
-  const canCreateTeacher = user?.role === "Admin";
+  const isPlatformAdmin = ["PlatformAdmin", "Admin"].includes(user?.role);
+  const canManageTeachers = isPlatformAdmin || user?.role === "CenterAdmin";
+  const canCreateTeacher = canManageTeachers;
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [teachers, setTeachers] = useState([]);
@@ -555,6 +576,8 @@ export default function Teachers() {
       {showForm && (
         <TeacherFormModal
           teacher={selectedTeacher}
+          centerId={user?.centerId}
+          isPlatformAdmin={isPlatformAdmin}
           onClose={() => setShowForm(false)}
           onSave={saveTeacher}
           saving={saving}

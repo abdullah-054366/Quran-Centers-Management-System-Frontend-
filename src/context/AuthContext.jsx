@@ -18,6 +18,7 @@ const AuthContext = createContext(null);
 
 const CLAIM_PREFIX = "http://schemas.microsoft.com/ws/2008/06/identity/claims/";
 const NAME_ID_CLAIM ="http://schemas.xmlsoap.org/ws/2005/12/identity/claims/nameidentifier";
+const NAME_CLAIM = "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name";
 const EMAIL_CLAIM ="http://schemas.xmlsoap.org/ws/2005/12/identity/claims/emailaddress";
 
 // قراءة محتوى الـ JWT (للعرض فقط، التحقق الحقيقي يتم في الـ API)
@@ -46,6 +47,7 @@ function buildUser(accessToken, fallbackEmail) {
   return {
     id: claims[NAME_ID_CLAIM] ?? claims.Id ?? claims.sub ?? null,
     email: claims[EMAIL_CLAIM] ?? claims.email ?? fallbackEmail ?? null,
+    fullName: claims[NAME_CLAIM] ?? claims.name ?? null,
     role: Array.isArray(role) ? role[0] : role,
     centerId: claims.centerId ? Number(claims.centerId) : null,
     teacherId: claims.teacherId ? Number(claims.teacherId) : null,
@@ -122,6 +124,10 @@ export function AuthProvider({ children }) {
     return data;
   }, []);
 
+  const setDisplayName = useCallback((fullName) => {
+    setUser((current) => (current ? { ...current, fullName } : current));
+  }, []);
+
   const logout = useCallback(async () => {
     const email = tokenStore.getEmail();
     const refreshToken = tokenStore.getRefreshToken();
@@ -147,8 +153,9 @@ export function AuthProvider({ children }) {
       login,
       register,
       logout,
+      setDisplayName,
     }),
-    [user, isLoading, login, register, logout],
+    [user, isLoading, login, register, logout, setDisplayName],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -5,6 +5,7 @@ import { addGroup, deleteGroup, getGroups, updateGroup } from "../api/groups";
 import { getTeachers } from "../api/teachers";
 import { useAuth } from "../context/AuthContext";
 
+
 function getList(data) {
   if (Array.isArray(data)) return data;
   if (Array.isArray(data?.data)) return data.data;
@@ -273,7 +274,7 @@ function GroupFormModal({ group, isAdmin, centerId, onClose, onSave, saving, err
 
 export default function Groups() {
   const { user } = useAuth();
-  const isAdmin = user?.role === "Admin";
+  const isAdmin = ["PlatformAdmin", "Admin"].includes(user?.role);
   const canManageGroups = isAdmin || user?.role === "CenterAdmin";
   const [groups, setGroups] = useState([]);
   const [loading, setLoading] = useState(true);

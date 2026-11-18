@@ -1,16 +1,18 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { useAuth } from "../../context/AuthContext";
+import { getErrorMessage } from "../../api/axiosClient";
 
 export default function Register() {
-//   const { register } = useAuth();
+  const { register } = useAuth();
   const navigate = useNavigate();
 
   const [form, setForm] = useState({
-    fullName: "",
-    phone: "",
+    firstName: "",
+    lastName: "",
+    email: "",
+    phoneNumber: "",
     centerCode: "",
-    username: "",
     password: "",
     confirmPassword: "",
   });
@@ -38,19 +40,20 @@ export default function Register() {
 
     try {
       await register({
-        fullName: form.fullName,
-        phone: form.phone,
-        centerCode: form.centerCode,
-        username: form.username,
+        firstName: form.firstName.trim(),
+        lastName: form.lastName.trim(),
+        email: form.email.trim(),
+        phoneNumber: form.phoneNumber.trim(),
+        centerCode: form.centerCode.trim(),
         password: form.password,
       });
 
       navigate("/login", {
         replace: true,
-        state: { message: "تم إرسال طلب إنشاء الحساب." },
+        state: { message: "تم إنشاء حسابك، سجّل الدخول للبدء." },
       });
     } catch (err) {
-      setError(err.message || "تعذر إنشاء الحساب.");
+      setError(getErrorMessage(err) || "تعذر إنشاء الحساب.");
     } finally {
       setSubmitting(false);
     }
@@ -69,10 +72,11 @@ export default function Register() {
 
           <form onSubmit={handleSubmit} className="mt-7 space-y-4">
             {[
-              ["fullName", "الاسم الكامل", "text"],
-              ["phone", "رقم الجوال", "tel"],
+              ["firstName", "الاسم الأول", "text"],
+              ["lastName", "اسم العائلة", "text"],
+              ["email", "البريد الإلكتروني", "email"],
+              ["phoneNumber", "رقم الجوال", "tel"],
               ["centerCode", "رمز المركز", "text"],
-              ["username", "اسم المستخدم", "text"],
               ["password", "كلمة المرور", "password"],
               ["confirmPassword", "تأكيد كلمة المرور", "password"],
             ].map(([name, label, type]) => (
@@ -88,6 +92,7 @@ export default function Register() {
                   onChange={updateField}
                   required
                   minLength={type === "password" ? 8 : undefined}
+                  dir={type === "email" || type === "password" || name === "centerCode" ? "ltr" : undefined}
                   autoComplete={
                     name === "password" || name === "confirmPassword"
                       ? "new-password"
@@ -99,7 +104,7 @@ export default function Register() {
             ))}
 
             <p className="text-xs leading-5 text-slate-500">
-              الدور يحدده النظام بعد إنشاء الحساب، ولا يختاره المستخدم من النموذج.
+              التسجيل للطلاب فقط. اطلب رمز المركز من إدارة المركز أو معلمك.
             </p>
 
             {error && (
