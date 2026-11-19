@@ -8,6 +8,7 @@ import {
 } from "react";
 import {
   api,
+  getCenterHalaqat,
   normalizeTokens,
   refreshSession,
   setAuthFailureHandler,
@@ -124,6 +125,9 @@ export function AuthProvider({ children }) {
     return data;
   }, []);
 
+  // حلقات المركز المعروضة للطالب أثناء التسجيل.
+  const loadCenterHalaqat = useCallback((centerCode) => getCenterHalaqat(centerCode), []);
+
   const setDisplayName = useCallback((fullName) => {
     setUser((current) => (current ? { ...current, fullName } : current));
   }, []);
@@ -152,10 +156,11 @@ export function AuthProvider({ children }) {
       isAuthenticated: Boolean(user),
       login,
       register,
+      loadCenterHalaqat,
       logout,
       setDisplayName,
     }),
-    [user, isLoading, login, register, logout, setDisplayName],
+    [user, isLoading, login, register, loadCenterHalaqat, logout, setDisplayName],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -144,6 +144,15 @@ export function refreshSession() {
   return refreshPromise;
 }
 
+// حلقات المركز المعروضة للطالب أثناء التسجيل (بلا تسجيل دخول).
+export async function getCenterHalaqat(centerCode) {
+  const { data } = await axios.get(`${API_URL}/Auth/center-halaqat`, {
+    params: { code: centerCode },
+    timeout: 15000,
+  });
+  return Array.isArray(data) ? data : [];
+}
+
 // عند 401: جدّد التوكن ثم أعد الطلب الأصلي مرة واحدة
 api.interceptors.response.use(
   (response) => response,

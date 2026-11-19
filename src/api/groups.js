@@ -41,3 +41,19 @@ export const deleteGroup = async (groupId) => {
     throw error;
   }
 };
+
+export const getGroupById = async (groupId) => (await api.get(`${GROUPS_ENDPOINT}/${groupId}`)).data;
+
+export const getGroupStudents = async (groupId) =>
+  (await api.get(`${GROUPS_ENDPOINT}/${groupId}/Students`)).data;
+
+// طلاب المركز غير المسجلين في أي حلقة.
+export const getAvailableStudents = async (groupId) =>
+  (await api.get(`${GROUPS_ENDPOINT}/${groupId}/AvailableStudents`)).data;
+
+export const assignStudents = async (groupId, studentIds) =>
+  (await api.post(`${GROUPS_ENDPOINT}/${groupId}/Students`, { studentIds })).data;
+
+export const removeStudentFromGroup = async (groupId, studentId) => {
+  await api.delete(`${GROUPS_ENDPOINT}/${groupId}/Students/${studentId}`);
+};

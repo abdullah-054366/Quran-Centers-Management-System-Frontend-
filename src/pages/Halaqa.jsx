@@ -1,7 +1,17 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { BookOpen, CheckCircle2, Pencil, Plus, Search, Trash2, Users, X } from "lucide-react";
+import { BookOpen, CheckCircle2, Pencil, Plus, Search, Trash2, UserPlus, Users, X } from "lucide-react";
 import { getCenters } from "../api/centers";
-import { addGroup, deleteGroup, getGroups, updateGroup } from "../api/groups";
+import {
+  addGroup,
+  assignStudents,
+  deleteGroup,
+  getAvailableStudents,
+  getGroups,
+  getGroupStudents,
+  removeStudentFromGroup,
+  updateGroup,
+} from "../api/groups";
+import { getErrorMessage } from "../api/axiosClient";
 import { getTeachers } from "../api/teachers";
 import { useAuth } from "../context/AuthContext";
 
@@ -55,6 +65,173 @@ function StatusBadge({ isActive }) {
     }`}>
       {isActive ? "نشطة" : "موقوفة"}
     </span>
+  );
+}
+
+// إدارة طلاب الحلقة: إضافة طلاب بلا حلقة، وإخراج طالب منها.
+function GroupStudentsModal({ group, onClose, onChanged }) {
+  const [students, setStudents] = useState([]);
+  const [available, setAvailable] = useState([]);
+  const [picked, setPicked] = useState([]);
+  const [query, setQuery] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const [current, pool] = await Promise.all([
+        getGroupStudents(group.id),
+        group.isActive ? getAvailableStudents(group.id) : Promise.resolve([]),
+      ]);
+      setStudents(getList(current));
+      setAvailable(getList(pool));
+      setPicked([]);
+    } catch (requestError) {
+      setError(getErrorMessage(requestError) || "تعذّر تحميل طلاب الحلقة.");
+    } finally {
+      setLoading(false);
+    }
+  }, [group.id, group.isActive]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const fullName = (student) =>
+    [student.firstName, student.lastName].filter(Boolean).join(" ") || `طالب ${student.studentId}`;
+
+  const filtered = available.filter((student) => {
+    const text = query.trim();
+    return !text || fullName(student).includes(text) || String(student.email ?? "").includes(text);
+  });
+
+  const togglePick = (studentId) =>
+    setPicked((current) =>
+      current.includes(studentId) ? current.filter((id) => id !== studentId) : [...current, studentId],
+    );
+
+  async function addPicked() {
+    if (!picked.length) return;
+    setBusy(true);
+    setError("");
+    try {
+      await assignStudents(group.id, picked);
+      await load();
+      onChanged();
+    } catch (requestError) {
+      setError(getErrorMessage(requestError));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function removeStudent(student) {
+    if (!window.confirm(`إخراج ${fullName(student)} من ${group.halaqaName}؟`)) return;
+    setBusy(true);
+    setError("");
+    try {
+      await removeStudentFromGroup(group.id, student.studentId);
+      await load();
+      onChanged();
+    } catch (requestError) {
+      setError(getErrorMessage(requestError));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/40 p-3 sm:items-center">
+      <div dir="rtl" role="dialog" aria-modal="true" aria-label={`طلاب ${group.halaqaName}`}
+        className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl sm:p-6">
+        <div className="mb-4 flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-extrabold text-slate-800">طلاب {group.halaqaName}</h2>
+            <p className="mt-1 text-xs text-slate-500">
+              {group.teacherName} · {students.length} طالب
+            </p>
+          </div>
+          <button type="button" onClick={onClose} aria-label="إغلاق"
+            className="grid h-9 w-9 place-items-center rounded-lg text-slate-400 hover:bg-slate-100">
+            <X size={18} />
+          </button>
+        </div>
+
+        {error && <p role="alert" className="mb-4 rounded-xl bg-rose-50 p-3 text-sm text-rose-700">{error}</p>}
+        {loading ? (
+          <p className="py-10 text-center text-sm text-slate-400">جارٍ التحميل…</p>
+        ) : (
+          <div className="space-y-6">
+            <section>
+              <h3 className="mb-2 text-sm font-bold text-slate-700">طلاب الحلقة</h3>
+              {students.length === 0 ? (
+                <p className="rounded-xl bg-slate-50 p-4 text-sm text-slate-500">لم يُسند أي طالب لهذه الحلقة بعد.</p>
+              ) : (
+                <ul className="divide-y divide-slate-100 rounded-xl border border-slate-100">
+                  {students.map((student) => (
+                    <li key={student.studentId} className="flex items-center gap-3 p-3">
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate font-bold text-slate-800">{fullName(student)}</span>
+                        <span className="block truncate text-xs text-slate-500">{student.email}</span>
+                      </span>
+                      <button type="button" disabled={busy} onClick={() => removeStudent(student)}
+                        className="rounded-lg px-3 py-2 text-xs font-bold text-rose-600 hover:bg-rose-50 disabled:opacity-50">
+                        إخراج
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+
+            <section>
+              <h3 className="mb-1 text-sm font-bold text-slate-700">إضافة طلاب</h3>
+              <p className="mb-3 text-xs text-slate-500">يظهر هنا طلاب المركز غير المسجلين في أي حلقة.</p>
+
+              {!group.isActive ? (
+                <p className="rounded-xl bg-amber-50 p-3 text-sm text-amber-800">الحلقة موقوفة، فعّلها أولاً لإضافة طلاب.</p>
+              ) : available.length === 0 ? (
+                <p className="rounded-xl bg-slate-50 p-4 text-sm text-slate-500">
+                  كل طلاب المركز مسندون إلى حلقات. أخرج الطالب من حلقته الحالية أولاً.
+                </p>
+              ) : (
+                <>
+                  <label className="mb-3 flex min-h-11 items-center gap-2 rounded-xl bg-slate-50 px-3 text-slate-400">
+                    <Search size={17} />
+                    <input value={query} onChange={(event) => setQuery(event.target.value)}
+                      placeholder="ابحث باسم الطالب"
+                      className="w-full bg-transparent text-sm text-slate-700 outline-none" />
+                  </label>
+                  <ul className="max-h-56 divide-y divide-slate-100 overflow-y-auto rounded-xl border border-slate-100">
+                    {filtered.map((student) => (
+                      <li key={student.studentId}>
+                        <label className="flex cursor-pointer items-center gap-3 p-3 hover:bg-emerald-50/50">
+                          <input type="checkbox" checked={picked.includes(student.studentId)}
+                            onChange={() => togglePick(student.studentId)}
+                            className="h-4 w-4 accent-emerald-700" />
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate font-semibold text-slate-800">{fullName(student)}</span>
+                            <span className="block truncate text-xs text-slate-500">{student.email}</span>
+                          </span>
+                        </label>
+                      </li>
+                    ))}
+                  </ul>
+                  <button type="button" onClick={addPicked} disabled={busy || !picked.length}
+                    className="mt-3 inline-flex items-center gap-2 rounded-xl bg-emerald-800 px-5 py-2.5 text-sm font-bold text-white hover:bg-emerald-900 disabled:opacity-50">
+                    <UserPlus size={16} />
+                    {busy ? "جارٍ الإضافة…" : picked.length ? `إضافة ${picked.length} طالباً` : "إضافة"}
+                  </button>
+                </>
+              )}
+            </section>
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -285,6 +462,7 @@ export default function Groups() {
   const [page, setPage] = useState(1);
   const [showForm, setShowForm] = useState(false);
   const [selectedGroup, setSelectedGroup] = useState(null);
+  const [studentsGroup, setStudentsGroup] = useState(null);
   const [saving, setSaving] = useState(false);
 
   const fetchGroups = useCallback(async () => {
@@ -491,6 +669,7 @@ export default function Groups() {
                   {canManageGroups && (
                     <td className="px-5 py-4">
                       <div className="flex items-center gap-1">
+                        <button type="button" onClick={() => setStudentsGroup(group)} aria-label={`طلاب ${group.halaqaName}`} title="الطلاب" className="grid h-9 w-9 place-items-center rounded-lg text-slate-500 transition hover:bg-emerald-50 hover:text-emerald-800"><Users size={17} /></button>
                         <button type="button" onClick={() => openEditForm(group)} aria-label={`تعديل ${group.halaqaName}`} title="تعديل" className="grid h-9 w-9 place-items-center rounded-lg text-slate-500 transition hover:bg-emerald-50 hover:text-emerald-800"><Pencil size={17} /></button>
                         <button type="button" onClick={() => removeGroup(group)} aria-label={`حذف ${group.halaqaName}`} title="حذف" className="grid h-9 w-9 place-items-center rounded-lg text-rose-600 transition hover:bg-rose-50"><Trash2 size={17} /></button>
                       </div>
@@ -524,6 +703,14 @@ export default function Groups() {
           onSave={saveGroup}
           saving={saving}
           error={actionError}
+        />
+      )}
+
+      {studentsGroup && (
+        <GroupStudentsModal
+          group={studentsGroup}
+          onClose={() => setStudentsGroup(null)}
+          onChanged={fetchGroups}
         />
       )}
     </main>

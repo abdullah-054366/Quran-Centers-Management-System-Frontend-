@@ -4,7 +4,7 @@ import { useAuth } from "../../context/AuthContext";
 import { getErrorMessage } from "../../api/axiosClient";
 
 export default function Register() {
-  const { register } = useAuth();
+  const { register, loadCenterHalaqat } = useAuth();
   const navigate = useNavigate();
 
   const [form, setForm] = useState({
@@ -20,11 +20,50 @@ export default function Register() {
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
+  // الحلقات تُحمَّل بعد التحقق من رمز المركز، ويختار الطالب حلقته قبل إنشاء الحساب.
+  const [halaqat, setHalaqat] = useState([]);
+  const [halaqaId, setHalaqaId] = useState(null);
+  const [checkedCode, setCheckedCode] = useState("");
+  const [checking, setChecking] = useState(false);
+  const [codeNotice, setCodeNotice] = useState("");
+
   function updateField(event) {
-    setForm((current) => ({
-      ...current,
-      [event.target.name]: event.target.value,
-    }));
+    const { name, value } = event.target;
+    setForm((current) => ({ ...current, [name]: value }));
+
+    if (name === "centerCode") {
+      setHalaqat([]);
+      setHalaqaId(null);
+      setCheckedCode("");
+      setCodeNotice("");
+    }
+  }
+
+  async function checkCode() {
+    const code = form.centerCode.trim();
+    setError("");
+    setCodeNotice("");
+    if (!code) {
+      setError("أدخل رمز المركز أولاً.");
+      return;
+    }
+
+    setChecking(true);
+    try {
+      const list = await loadCenterHalaqat(code);
+      setHalaqat(list);
+      setHalaqaId(null);
+      setCheckedCode(code);
+      if (list.length === 0) {
+        setCodeNotice("الرمز صحيح، ولا توجد حلقات في هذا المركز بعد. ستُضاف إلى حلقة لاحقاً من إدارة المركز.");
+      }
+    } catch (err) {
+      setHalaqat([]);
+      setCheckedCode("");
+      setError(getErrorMessage(err) || "تعذّر التحقق من رمز المركز.");
+    } finally {
+      setChecking(false);
+    }
   }
 
   async function handleSubmit(event) {
@@ -33,6 +72,16 @@ export default function Register() {
 
     if (form.password !== form.confirmPassword) {
       setError("كلمتا المرور غير متطابقتين.");
+      return;
+    }
+
+    if (form.centerCode.trim() !== checkedCode) {
+      setError("اضغط «عرض الحلقات» للتحقق من رمز المركز أولاً.");
+      return;
+    }
+
+    if (halaqat.length > 0 && !halaqaId) {
+      setError("اختر الحلقة التي تريد الانضمام إليها.");
       return;
     }
 
@@ -45,6 +94,7 @@ export default function Register() {
         email: form.email.trim(),
         phoneNumber: form.phoneNumber.trim(),
         centerCode: form.centerCode.trim(),
+        halaqaId: halaqaId ?? null,
         password: form.password,
       });
 
@@ -102,6 +152,59 @@ export default function Register() {
                 />
               </div>
             ))}
+
+            <button
+              type="button"
+              onClick={checkCode}
+              disabled={checking}
+              className="w-full rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-bold text-emerald-800 hover:bg-emerald-100 disabled:opacity-60"
+            >
+              {checking ? "جارٍ التحقق…" : checkedCode ? "تحديث الحلقات" : "عرض حلقات المركز"}
+            </button>
+
+            {codeNotice && (
+              <p className="rounded-xl bg-sky-50 p-3 text-sm text-sky-800">{codeNotice}</p>
+            )}
+
+            {halaqat.length > 0 && (
+              <fieldset className="space-y-2">
+                <legend className="mb-1 text-sm font-semibold text-slate-700">اختر حلقتك</legend>
+                <p className="mb-2 text-xs text-slate-500">
+                  لا يمكنك تغييرها بعد التسجيل إلا عن طريق إدارة المركز أو المعلم.
+                </p>
+                {halaqat.map((halaqa) => (
+                  <label
+                    key={halaqa.halaqaId}
+                    className={`flex cursor-pointer items-center gap-3 rounded-xl border p-3 transition ${
+                      halaqaId === halaqa.halaqaId
+                        ? "border-emerald-700 bg-emerald-50"
+                        : "border-slate-200 hover:bg-slate-50"
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="halaqaId"
+                      value={halaqa.halaqaId}
+                      checked={halaqaId === halaqa.halaqaId}
+                      onChange={() => setHalaqaId(halaqa.halaqaId)}
+                      className="h-4 w-4 accent-emerald-700"
+                    />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate font-bold text-slate-800">{halaqa.halaqaName}</span>
+                      <span className="block truncate text-xs text-slate-500">
+                        {halaqa.teacherName ? `المعلم: ${halaqa.teacherName}` : "بلا معلم بعد"}
+                      </span>
+                      {halaqa.description && (
+                        <span className="block truncate text-xs text-slate-400">{halaqa.description}</span>
+                      )}
+                    </span>
+                    <span className="shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">
+                      {halaqa.studentCount} طالب
+                    </span>
+                  </label>
+                ))}
+              </fieldset>
+            )}
 
             <p className="text-xs leading-5 text-slate-500">
               التسجيل للطلاب فقط. اطلب رمز المركز من إدارة المركز أو معلمك.
