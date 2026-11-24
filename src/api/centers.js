@@ -91,6 +91,10 @@ export const deleteCenter = async (centerId) => {
   await api.delete(`${CENTERS_ENDPOINT}/${centerId}`);
 };
 
+// محو المركز وكل بياناته. لا رجعة فيه؛ الخادم يطلب اسم المركز وأن يكون موقوفاً.
+export const purgeCenter = async (centerId, centerName) =>
+  (await api.delete(`${CENTERS_ENDPOINT}/${centerId}/purge`, { params: { confirm: centerName } })).data;
+
 export const getCenterOverview = async (centerId) =>
   (await api.get(`${CENTERS_ENDPOINT}/${centerId}/overview`)).data;
 

@@ -4,6 +4,7 @@ import { FileSpreadsheet } from 'lucide-react'
 import {
   addCenter as addCenterApi,
   deleteCenter,
+  purgeCenter,
   getCenterDeletionSummary,
   getCenters,
   regenerateCenterCode,
@@ -155,6 +156,8 @@ function DeleteCenterModal({ center, onClose, onDeleted, onSuspend }) {
   const [typed, setTyped] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  // المحو الشامل مسار منفصل عن الحذف الآمن، ولا يُفتح إلا باختيار صريح.
+  const [purge, setPurge] = useState(false)
 
   useEffect(() => {
     let alive = true
@@ -170,7 +173,8 @@ function DeleteCenterModal({ center, onClose, onDeleted, onSuspend }) {
     setBusy(true)
     setError('')
     try {
-      await deleteCenter(center.centerId)
+      if (purge) await purgeCenter(center.centerId, center.centerName)
+      else await deleteCenter(center.centerId)
       onDeleted(center)
     } catch (err) {
       setError(apiErrorMessage(err))
@@ -192,12 +196,12 @@ function DeleteCenterModal({ center, onClose, onDeleted, onSuspend }) {
 
   return (
     <ConfirmModal
-      title={`حذف ${center.centerName}`}
+      title={purge ? `محو ${center.centerName} وكل بياناته` : `حذف ${center.centerName}`}
       danger
-      confirmLabel="حذف نهائي"
+      confirmLabel={purge ? 'محو نهائي' : 'حذف نهائي'}
       busy={busy}
       error={error}
-      disabled={!summary || !summary.canDelete || typed.trim() !== center.centerName}
+      disabled={!summary || typed.trim() !== center.centerName || (!purge && !summary.canDelete)}
       onClose={() => !busy && onClose()}
       onConfirm={confirm}
     >
@@ -213,7 +217,7 @@ function DeleteCenterModal({ center, onClose, onDeleted, onSuspend }) {
               </li>
             ))}
           </ul>
-          {summary.canDelete ? (
+          {summary.canDelete || purge ? (
             <label className="block text-sm font-medium text-slate-700">
               اكتب اسم المركز للتأكيد
               <input value={typed} onChange={(e) => setTyped(e.target.value)} className={fieldClass} placeholder={center.centerName} />
@@ -227,6 +231,25 @@ function DeleteCenterModal({ center, onClose, onDeleted, onSuspend }) {
                 </button>
               )}
             </div>
+          )}
+
+          {!summary.canDelete && !center.isActive && !purge && (
+            <div className="space-y-2 rounded-xl border border-rose-200 bg-rose-50 p-3 text-rose-800">
+              <p>
+                أو <strong>المحو النهائي</strong>: يحذف المركز وكل ما في الجدول أعلاه — الطلاب والمعلمين والحلقات
+                وسجلات الحضور والحفظ والخطط والحسابات. لا رجعة فيه ولا استرجاع إلا من نسخة احتياطية.
+              </p>
+              <button type="button" onClick={() => setPurge(true)} className="rounded-lg bg-rose-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-rose-800">
+                أريد المحو النهائي
+              </button>
+            </div>
+          )}
+
+          {purge && (
+            <p className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-rose-800">
+              ستُحذف كل البيانات أعلاه نهائياً. الحسابات التي سجّلت في مركز آخر تُفصل وتُعطَّل بدل حذفها، ويبقى أثر
+              العملية في سجل التدقيق.
+            </p>
           )}
         </>
       )}
