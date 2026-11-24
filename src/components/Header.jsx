@@ -20,7 +20,7 @@ export default function Header({ onMenuClick }) {
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const { logout } = useAuth();
-  const title = titles[pathname] ?? "منصة مِشكاة";
+  const title = titles[pathname] ?? "منصة وِرْد";
 
   const handleLogout = async () => {
     await logout();

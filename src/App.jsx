@@ -90,7 +90,7 @@ function App() {
             path="/groups"
             element={
               <RequireRole
-                allowedRoles={["PlatformAdmin", "Admin", "CenterAdmin"]}
+                allowedRoles={["PlatformAdmin", "Admin", "CenterAdmin", "Teacher"]}
               >
                 <HalaqatPage />
               </RequireRole>

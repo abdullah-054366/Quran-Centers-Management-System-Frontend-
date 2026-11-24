@@ -390,7 +390,7 @@ function Centers() {
           <div>
             <h1 className="mk-head text-2xl font-bold sm:text-3xl">المراكز</h1>
             <p className="mt-2 text-sm text-emerald-800/70">
-              تابع المراكز المسجّلة في مشكاة، وفعّل أو أوقف أي مركز يدوياً.
+              تابع المراكز المسجّلة في وِرْد، وفعّل أو أوقف أي مركز يدوياً.
             </p>
           </div>
           <div className="flex gap-2">

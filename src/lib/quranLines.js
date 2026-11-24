@@ -103,22 +103,3 @@ export function aggregateRecords(records, calculator, { from, to } = {}) {
 }
 
 /** مفاتيح التجميع: يومي / أسبوعي (حسب أسابيع الشهر كما في الواجهة) / شهري. */
-export const groupKeys = {
-  day: (date) => date,
-  month: (date) => date.slice(0, 7),
-  week: (date) => `${date.slice(0, 7)}-W${Math.ceil(Number(date.slice(8, 10)) / 7)}`,
-};
-
-export function aggregateBy(records, calculator, keyFn) {
-  const groups = new Map();
-  for (const record of records) {
-    const key = keyFn(record.date);
-    if (!groups.has(key)) groups.set(key, []);
-    groups.get(key).push(record);
-  }
-  return new Map(
-    [...groups.entries()]
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([key, list]) => [key, aggregateRecords(list, calculator)]),
-  );
-}

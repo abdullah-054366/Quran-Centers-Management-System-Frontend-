@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;600;700;800&family=Reem+Kufi:wght@700&display=swap');
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -106,3 +106,13 @@ html.dark .disabled\:bg-slate-50:disabled { background-color: #121d18 !important
 html.dark .hover\:bg-sky-50:hover { background-color: #12303f !important; }
 html.dark .hover\:bg-amber-50:hover { background-color: #33290f !important; }
 html.dark .shadow-sm, html.dark .shadow-soft { box-shadow: 0 1px 2px rgba(0,0,0,.5); }
+
+
+/* هوية وِرْد: الاسم بخط ريم كوفي، وخلفية صفحات الدخول العاجية */
+.wird-wordmark { font-family: 'Reem Kufi', Tajawal, sans-serif; font-weight: 700; }
+html.dark .bg-\[\#F7F5EF\] { background-color: #0c1411 !important; }
+html.dark .text-\[\#1B2421\] { color: #e2e8f0 !important; }
+html.dark .text-\[\#0F5E4B\] { color: #6ee7b7 !important; }
+html.dark .text-\[\#56625E\] { color: #a3b1bf !important; }
+html.dark .border-\[\#0F5E4B\] { border-color: #34d399 !important; }
+html.dark .bg-\[\#E3DFD3\] { background-color: #26352d !important; }

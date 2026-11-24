@@ -343,7 +343,7 @@ export default function StudentRecord() {
       <div className="hidden print:block">
         <div className="flex items-end justify-between border-b-2 border-emerald-700 pb-2">
           <div>
-            <p className="text-[10px] font-semibold text-emerald-700">مشكاة · إدارة الحلقات القرآنية</p>
+            <p className="text-[10px] font-semibold text-emerald-700">وِرْد · إدارة الحلقات القرآنية</p>
             <h1 className="text-lg font-extrabold text-slate-900">سجل الطالب الشهري</h1>
           </div>
           <p className="text-sm font-bold text-slate-800">{monthLabel}</p>

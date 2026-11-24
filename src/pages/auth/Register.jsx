@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { useAuth } from "../../context/AuthContext";
 import { getErrorMessage } from "../../api/axiosClient";
+import { WirdMark, APP_NAME, APP_TAGLINE } from "../../components/Logo";
 
 export default function Register() {
   const { register, loadCenterHalaqat } = useAuth();
@@ -110,13 +111,20 @@ export default function Register() {
   }
 
   return (
-    <main dir="rtl" className="grid min-h-screen bg-slate-50 lg:grid-cols-2">
-      <section className="flex items-center justify-center p-5 sm:p-10">
-        <div className="w-full max-w-md rounded-3xl bg-white p-7 shadow-sm sm:p-9">
-          <h1 className="text-2xl font-extrabold text-slate-900">
+    <main dir="rtl" className="flex min-h-screen justify-center bg-[#F7F5EF] px-6 py-12 text-[#1B2421]">
+      <section className="w-full max-w-md">
+        <div className="w-full">
+          <div className="flex flex-col items-center text-center">
+            <div className="flex items-center gap-2">
+              <WirdMark size={48} color="#0F5E4B" light="#C9A227" strokeWidth={3.5} />
+              <p className="wird-wordmark text-5xl leading-tight text-[#0F5E4B]">{APP_NAME}</p>
+            </div>
+            <p className="mt-1 text-[15px] text-[#56625E]">{APP_TAGLINE}</p>
+          </div>
+          <h1 className="mt-9 text-2xl font-bold">
             إنشاء حساب طالب
           </h1>
-          <p className="mt-2 text-sm text-slate-500">
+          <p className="mt-1 text-sm text-[#56625E]">
             أدخل بياناتك ورمز المركز لإنشاء الحساب.
           </p>
 
@@ -131,7 +139,7 @@ export default function Register() {
               ["confirmPassword", "تأكيد كلمة المرور", "password"],
             ].map(([name, label, type]) => (
               <div key={name}>
-                <label htmlFor={name} className="mb-2 block text-sm font-semibold text-slate-700">
+                <label htmlFor={name} className="mb-2 block text-sm font-medium">
                   {label}
                 </label>
                 <input
@@ -148,7 +156,7 @@ export default function Register() {
                       ? "new-password"
                       : undefined
                   }
-                  className="w-full rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-emerald-600"
+                  className="h-[52px] w-full rounded-xl border border-[#D9D4C6] bg-white px-4 outline-none focus:border-[#0F5E4B] focus:ring-2 focus:ring-[#0F5E4B]/15"
                 />
               </div>
             ))}
@@ -157,7 +165,7 @@ export default function Register() {
               type="button"
               onClick={checkCode}
               disabled={checking}
-              className="w-full rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-bold text-emerald-800 hover:bg-emerald-100 disabled:opacity-60"
+              className="h-12 w-full rounded-xl border-[1.5px] border-[#0F5E4B] text-sm font-bold text-[#0F5E4B] transition hover:bg-[#0F5E4B]/5 disabled:opacity-60"
             >
               {checking ? "جارٍ التحقق…" : checkedCode ? "تحديث الحلقات" : "عرض حلقات المركز"}
             </button>
@@ -177,8 +185,8 @@ export default function Register() {
                     key={halaqa.halaqaId}
                     className={`flex cursor-pointer items-center gap-3 rounded-xl border p-3 transition ${
                       halaqaId === halaqa.halaqaId
-                        ? "border-emerald-700 bg-emerald-50"
-                        : "border-slate-200 hover:bg-slate-50"
+                        ? "border-[#0F5E4B] bg-white ring-1 ring-[#0F5E4B]"
+                        : "border-[#E3DFD3] bg-white hover:border-[#0F5E4B]/40"
                     }`}
                   >
                     <input
@@ -187,7 +195,7 @@ export default function Register() {
                       value={halaqa.halaqaId}
                       checked={halaqaId === halaqa.halaqaId}
                       onChange={() => setHalaqaId(halaqa.halaqaId)}
-                      className="h-4 w-4 accent-emerald-700"
+                      className="h-4 w-4 accent-[#0F5E4B]"
                     />
                     <span className="min-w-0 flex-1">
                       <span className="block truncate font-bold text-slate-800">{halaqa.halaqaName}</span>
@@ -219,31 +227,26 @@ export default function Register() {
             <button
               type="submit"
               disabled={submitting}
-              className="w-full rounded-xl bg-emerald-700 px-5 py-3 font-bold text-white hover:bg-emerald-800 disabled:opacity-60"
+              className="h-[54px] w-full rounded-2xl bg-[#0F5E4B] text-[17px] font-bold text-white transition hover:bg-[#0A4537] disabled:opacity-60"
             >
               {submitting ? "جارٍ إنشاء الحساب..." : "إنشاء الحساب"}
             </button>
           </form>
 
-          <p className="mt-6 text-center text-sm text-slate-500">
-            لديك حساب؟{" "}
-            <Link to="/login" className="font-bold text-emerald-700">
-              تسجيل الدخول
-            </Link>
-          </p>
+          <div className="mt-10 flex items-center gap-3">
+            <span className="h-px flex-1 bg-[#E3DFD3]" />
+            <span className="text-sm text-[#56625E]">لديك حساب؟</span>
+            <span className="h-px flex-1 bg-[#E3DFD3]" />
+          </div>
+          <Link
+            to="/login"
+            className="mt-4 flex h-[52px] w-full items-center justify-center rounded-2xl border-[1.5px] border-[#0F5E4B] font-bold text-[#0F5E4B] transition hover:bg-[#0F5E4B]/5"
+          >
+            تسجيل الدخول
+          </Link>
         </div>
       </section>
 
-      <aside className="hidden items-center justify-center bg-emerald-800 p-12 text-center text-white lg:flex">
-        <div className="max-w-md">
-          <h2 className="text-4xl font-extrabold leading-relaxed">
-            ابدأ رحلتك في الحفظ
-          </h2>
-          <p className="mt-4 leading-8 text-emerald-100">
-            انضم إلى مركزك وتابع خطة حفظك ومراجعتك.
-          </p>
-        </div>
-      </aside>
     </main>
   );
 }

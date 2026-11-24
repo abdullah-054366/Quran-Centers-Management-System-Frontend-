@@ -11,16 +11,16 @@ export default defineConfig({
 
       manifest: {
         id: "/",
-        name: "مشكاة",
-        short_name: "مشكاة",
+        name: "وِرْد",
+        short_name: "وِرْد",
         description: "منصة إدارة حلقات القرآن الكريم",
         lang: "ar",
         dir: "rtl",
         start_url: "/",
         scope: "/",
         display: "standalone",
-        background_color: "#09362A",
-        theme_color: "#0F4C3A",
+        background_color: "#065f46",
+        theme_color: "#0f766e",
 
         icons: [
           {

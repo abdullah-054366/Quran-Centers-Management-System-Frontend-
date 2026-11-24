@@ -23,7 +23,7 @@ export const NAV_LINKS = [
   { to: "/student", label: "ملفي وجدول الحفظ", short: "ملفي", icon: BookOpen, roles: ["Student"] },
   { to: "/centers", label: "المراكز", icon: Building2, roles: ADMINS },
   { to: "/users", label: "المستخدمون", icon: ShieldCheck, roles: ADMINS },
-  { to: "/groups", label: "الحلقات", icon: Users, roles: CENTER_STAFF },
+  { to: "/groups", label: "الحلقات", icon: Users, roles: STAFF },
   { to: "/teachers", label: "المدرسون", icon: UserRound, roles: CENTER_STAFF },
   { to: "/students", label: "الطلاب", icon: GraduationCap, roles: STAFF },
   { to: "/memorization", label: "تسجيل الحفظ", short: "الحفظ", icon: BookOpen, roles: ["Teacher"] },

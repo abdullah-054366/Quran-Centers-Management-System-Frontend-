@@ -453,6 +453,8 @@ export default function Groups() {
   const { user } = useAuth();
   const isAdmin = ["PlatformAdmin", "Admin"].includes(user?.role);
   const canManageGroups = isAdmin || user?.role === "CenterAdmin";
+  // المعلم يدير طلاب حلقاته فقط؛ إنشاء الحلقات وتعديلها وحذفها للإدارة.
+  const canManageStudents = canManageGroups || user?.role === "Teacher";
   const [groups, setGroups] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -516,7 +518,7 @@ export default function Groups() {
   const pageCount = Math.max(1, Math.ceil(visibleGroups.length / pageSize));
   const currentPage = Math.min(page, pageCount);
   const pageGroups = visibleGroups.slice((currentPage - 1) * pageSize, currentPage * pageSize);
-  const tableColumnCount = 6 + (isAdmin ? 1 : 0) + (canManageGroups ? 1 : 0);
+  const tableColumnCount = 6 + (isAdmin ? 1 : 0) + (canManageStudents ? 1 : 0);
 
   function openAddForm() {
     setSelectedGroup(null);
@@ -641,7 +643,7 @@ export default function Groups() {
                 <th className="px-5 py-4 font-semibold">عدد الطلاب</th>
                 <th className="px-5 py-4 font-semibold">تاريخ الإنشاء</th>
                 <th className="px-5 py-4 font-semibold">الحالة</th>
-                {canManageGroups && <th className="px-5 py-4 font-semibold">الإجراءات</th>}
+                {canManageStudents && <th className="px-5 py-4 font-semibold">الإجراءات</th>}
               </tr>
             </thead>
             <tbody>
@@ -666,12 +668,16 @@ export default function Groups() {
                   <td className="px-5 py-4 text-slate-500">{group.studentCount}</td>
                   <td className="px-5 py-4 text-slate-500">{formatDate(group.createdAt)}</td>
                   <td className="px-5 py-4"><StatusBadge isActive={group.isActive} /></td>
-                  {canManageGroups && (
+                  {canManageStudents && (
                     <td className="px-5 py-4">
                       <div className="flex items-center gap-1">
                         <button type="button" onClick={() => setStudentsGroup(group)} aria-label={`طلاب ${group.halaqaName}`} title="الطلاب" className="grid h-9 w-9 place-items-center rounded-lg text-slate-500 transition hover:bg-emerald-50 hover:text-emerald-800"><Users size={17} /></button>
-                        <button type="button" onClick={() => openEditForm(group)} aria-label={`تعديل ${group.halaqaName}`} title="تعديل" className="grid h-9 w-9 place-items-center rounded-lg text-slate-500 transition hover:bg-emerald-50 hover:text-emerald-800"><Pencil size={17} /></button>
-                        <button type="button" onClick={() => removeGroup(group)} aria-label={`حذف ${group.halaqaName}`} title="حذف" className="grid h-9 w-9 place-items-center rounded-lg text-rose-600 transition hover:bg-rose-50"><Trash2 size={17} /></button>
+                        {canManageGroups && (
+                          <>
+                            <button type="button" onClick={() => openEditForm(group)} aria-label={`تعديل ${group.halaqaName}`} title="تعديل" className="grid h-9 w-9 place-items-center rounded-lg text-slate-500 transition hover:bg-emerald-50 hover:text-emerald-800"><Pencil size={17} /></button>
+                            <button type="button" onClick={() => removeGroup(group)} aria-label={`حذف ${group.halaqaName}`} title="حذف" className="grid h-9 w-9 place-items-center rounded-lg text-rose-600 transition hover:bg-rose-50"><Trash2 size={17} /></button>
+                          </>
+                        )}
                       </div>
                     </td>
                   )}

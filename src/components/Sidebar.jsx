@@ -1,6 +1,6 @@
 import { NavLink } from "react-router";
 import { useAuth } from "../context/AuthContext";
-import { BookOpen } from "lucide-react";
+import { WirdMark, APP_NAME, APP_TAGLINE } from "./Logo";
 import { getNavLinks } from "../lib/navLinks";
 
 const ROLE_TITLES = {
@@ -24,11 +24,11 @@ export default function Sidebar({ open, onClose }) {
       <div className="flex h-[76px] items-center justify-between border-b px-5">
         <div className="flex items-center gap-3">
           <div className="grid h-10 w-10 place-items-center rounded-xl bg-emerald-800 text-white">
-            <BookOpen size={21} />
+            <WirdMark size={28} color="#ffffff" />
           </div>
           <div>
-            <p className="text-lg font-extrabold">مِشكاة</p>
-            <p className="text-xs text-slate-400">إدارة الحلقات القرآنية</p>
+            <p className="wird-wordmark text-2xl leading-tight text-emerald-800">{APP_NAME}</p>
+            <p className="text-xs text-slate-400">{APP_TAGLINE}</p>
           </div>
         </div>
       </div>
