@@ -1,648 +1,365 @@
-import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router";
-import {
-  BookOpenCheck,
-  CirclePause,
-  CirclePlay,
-  ListChecks,
-  Plus,
-  RotateCcw,
-  Search,
-  X,
-} from "lucide-react";
-import { findPage, getSurahMeta } from "quran-meta/hafs";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router";
+import { ClipboardList, Plus, Search } from "lucide-react";
+import { getMemorizationPlans } from "../../api/plans";
+import { getMemorizationRecords } from "../../api/memorization";
 import { getStudents } from "../../api/students";
-import {
-  addMemorizationPlan,
-  getMemorizationPlans,
-  updateMemorizationPlanStatus,
-} from "../../api/plans";
 import { getErrorMessage } from "../../api/axiosClient";
 import { useAuth } from "../../context/AuthContext";
-import ayahLines from "../../data/ayahLines.json";
-import { createLineCalculator } from "../../lib/quranLines";
-import { targetSessionCount } from "../../lib/planSchedule";
+import { amountLabel, buildPlanView, WEEKDAYS } from "../../lib/planSchedule";
+import PlanFormModal from "../../components/plans/PlanFormModal";
+import Segmented from "../../components/plans/Segmented";
+import { asList, calculator, formatDay, rangeText, riyadhToday } from "../../components/plans/planUi";
 
-const calculator = createLineCalculator(ayahLines);
+const STAFF = ["PlatformAdmin", "Admin", "CenterAdmin", "Teacher"];
 
-const weekDays = [
-  "الأحد",
-  "الإثنين",
-  "الثلاثاء",
-  "الأربعاء",
-  "الخميس",
-  "الجمعة",
-  "السبت",
+const TYPE_FILTERS = [
+  { value: "all", label: "الكل" },
+  { value: "memorization", label: "حفظ" },
+  { value: "review", label: "مراجعة" },
 ];
 
-const surahs = Array.from({ length: 114 }, (_, index) => {
-  const id = index + 1;
-  const info = getSurahMeta(id);
-  return { id, name: info.name, ayahCount: info.ayahCount };
-});
+// حالة الخطة: تحدّد اللون والعبارة في البطاقة والصفّ معاً (مطابقة للجوال).
+const STATES = {
+  closed: { label: "أُقفلت ناقصة", text: "text-rose-700", bg: "bg-rose-50", ring: "border-rose-600", dot: "bg-rose-600", bar: "bg-rose-600" },
+  late: { label: "متأخّرة", text: "text-amber-700", bg: "bg-amber-50", ring: "border-amber-600", dot: "bg-amber-500", bar: "bg-emerald-700" },
+  today: { label: "مطلوب اليوم", text: "text-emerald-800", bg: "bg-emerald-50", ring: "border-emerald-700", dot: "bg-emerald-600", bar: "bg-emerald-700" },
+  done: { label: "اكتملت", text: "text-emerald-800", bg: "bg-emerald-50", ring: "border-emerald-700", dot: "bg-emerald-600", bar: "bg-emerald-700" },
+  paused: { label: "موقوفة", text: "text-slate-500", bg: "bg-slate-100", ring: "border-slate-400", dot: "bg-slate-400", bar: "bg-slate-400" },
+  upcoming: { label: "منتظمة", text: "text-sky-700", bg: "bg-sky-50", ring: "border-sky-600", dot: "bg-sky-600", bar: "bg-emerald-700" },
+};
 
-function getPageCount(fromSurah, toSurah) {
-  const from = Number(fromSurah);
-  const to = Number(toSurah);
-  if (!from || !to || from > to) return 0;
+/** حالة واحدة لكل خطة من مخرجات المحرّك، تُحسب مرّة وتُستعمل في كل مكان. */
+function planState({ plan, view }) {
+  const t = view?.totals;
+  const todayRow = view?.rows.find((row) => row.kind === "today");
+  const missed = view?.rows.filter((row) => row.kind === "missed").length ?? 0;
+  const next = view?.rows.find((row) => row.kind === "upcoming");
 
-  const firstPage = findPage(from, 1);
-  const lastSurah = getSurahMeta(to);
-  const lastPage = findPage(to, lastSurah.ayahCount);
-  return lastPage - firstPage + 1;
+  const closed = Boolean(t?.closedIncomplete);
+  // المتأخّر: جلسة فائتة هذا الشهر، أو جلسة اليوم تحمل مقدار ما تأخّر.
+  const late = !closed && (missed > 0 || Boolean(todayRow?.catchUp));
+  const key = closed ? "closed" : late ? "late" : t?.completed ? "done" : !plan.isActive ? "paused" : todayRow ? "today" : "upcoming";
+
+  return { plan, totals: t, todayRow, next, missed, closed, late, key, needsFollowUp: closed || late };
 }
 
-function getTodayDate() {
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Riyadh",
-  }).format(new Date());
-}
-
-function toPlanView(plan) {
-  return {
-    id: plan.memorizationPlanId,
-    studentId: plan.studentId,
-    type: plan.type === 1 ? "review" : "memorization",
-    student: plan.studentName,
-    fromSurah: plan.fromSurah,
-    toSurah: plan.toSurah,
-    pagesPerSession: plan.pagesPerSession,
-    targetRounds: plan.targetRounds,
-    completedSessions: plan.completedSessions || 0,
-    startDate: plan.startDate,
-    days: (plan.daysOfWeek || []).map((day) => weekDays[day]).filter(Boolean),
-    active: plan.isActive,
-  };
-}
-
-const getTargetSessions = (plan) => targetSessionCount(plan, calculator);
-
-function formatPlanDate(value) {
-  const date = new Date(`${String(value).slice(0, 10)}T00:00:00`);
-  if (Number.isNaN(date.getTime())) return value;
-  return new Intl.DateTimeFormat("ar-SA-u-ca-gregory-nu-latn", { day: "numeric", month: "long", year: "numeric" }).format(date);
-}
-
-function PlanCard({ plan, onToggle, isUpdating }) {
-  const isReview = plan.type === "review";
-  const targetSessions = getTargetSessions(plan);
-  const completedSessions = Math.min(plan.completedSessions, targetSessions);
-  const percentage = Math.min(Math.round((completedSessions / targetSessions) * 100), 100);
-  const done = percentage >= 100;
-  const accent = isReview ? "text-sky-700" : "text-emerald-700";
-  const bar = isReview ? "bg-sky-600" : "bg-emerald-600";
-  const fromName = getSurahMeta(Number(plan.fromSurah)).name;
-  const toName = getSurahMeta(Number(plan.toSurah)).name;
-  const range = plan.fromSurah === plan.toSurah ? `سورة ${fromName}` : `من ${fromName} إلى ${toName}`;
-  const pace = isReview
-    ? `${plan.pagesPerSession} صفحة في الجلسة · ${plan.targetRounds} ${plan.targetRounds === 1 ? "دورة" : "دورات"}`
-    : `${plan.pagesPerSession} صفحة في الجلسة`;
-
+function StatCell({ label, value }) {
   return (
-    <article
-      className={`flex flex-col rounded-2xl border border-slate-100 bg-white p-5 shadow-sm ${
-        plan.active ? "" : "opacity-70"
-      }`}
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h2 className="truncate text-base font-bold text-slate-800">{plan.student}</h2>
-          <p className="mt-0.5 text-sm text-slate-500">{range}</p>
-        </div>
-        {!plan.active && (
-          <span className="shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-500">
-            متوقفة
-          </span>
-        )}
-        {done && plan.active && (
-          <span className="shrink-0 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700">
-            مكتملة
-          </span>
-        )}
-      </div>
-
-      <div className="mt-5 flex items-end justify-between gap-3">
-        <p className={`text-4xl font-extrabold leading-none ${accent}`}>{percentage}%</p>
-        <p className="text-xs text-slate-500">
-          {completedSessions} من {targetSessions} جلسة
-        </p>
-      </div>
-      <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100">
-        <div className={`h-full rounded-full transition-all ${bar}`} style={{ width: `${percentage}%` }} />
-      </div>
-
-      <p className="mt-4 text-xs leading-6 text-slate-500">
-        {pace}
-        <br />
-        {plan.days.join("، ")} · تبدأ {formatPlanDate(plan.startDate)}
-      </p>
-
-      <div className="mt-5 flex items-center gap-2 border-t border-slate-100 pt-4">
-        <Link
-          to={`/plans/${plan.id}`}
-          className={`inline-flex flex-1 items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold text-white ${
-            isReview ? "bg-sky-700 hover:bg-sky-800" : "bg-emerald-700 hover:bg-emerald-800"
-          }`}
-        >
-          <ListChecks size={17} />
-          عرض الجدول
-        </Link>
-        <button
-          type="button"
-          disabled={isUpdating}
-          onClick={() => onToggle(plan)}
-          title={plan.active ? "إيقاف الخطة" : "تفعيل الخطة"}
-          aria-label={plan.active ? "إيقاف الخطة" : "تفعيل الخطة"}
-          className="grid h-10 w-10 place-items-center rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-60"
-        >
-          {plan.active ? <CirclePause size={18} /> : <CirclePlay size={18} />}
-        </button>
-      </div>
-    </article>
-  );
-}
-
-function AddPlanModal({ type, students, saving, onClose, onSave }) {
-  const isReview = type === "review";
-  const [studentId, setStudentId] = useState(String(students[0]?.studentId || ""));
-  const [fromSurah, setFromSurah] = useState(isReview ? "1" : "78");
-  const [toSurah, setToSurah] = useState(isReview ? "5" : "114");
-  const [pagesPerSession, setPagesPerSession] = useState(isReview ? "5" : "1");
-  const [targetRounds, setTargetRounds] = useState("4");
-  const [startDate, setStartDate] = useState(getTodayDate());
-  const [days, setDays] = useState(["الأحد", "الثلاثاء", "الخميس"]);
-  const [error, setError] = useState("");
-
-  const totalPages = getPageCount(fromSurah, toSurah);
-
-  function toggleDay(day) {
-    setDays((current) =>
-      current.includes(day)
-        ? current.filter((item) => item !== day)
-        : [...current, day],
-    );
-  }
-
-  async function handleSubmit(event) {
-    event.preventDefault();
-    setError("");
-
-    if (!studentId) {
-      setError("اختر الطالب.");
-      return;
-    }
-    if (Number(fromSurah) > Number(toSurah)) {
-      setError("سورة البداية يجب أن تسبق سورة النهاية.");
-      return;
-    }
-    if (days.length === 0) {
-      setError("اختر يوماً واحداً على الأقل.");
-      return;
-    }
-    const pages = Number(pagesPerSession);
-    if (!Number.isInteger(pages) || pages < 1 || pages > 604) {
-      setError("صفحات الجلسة يجب أن تكون عدداً صحيحاً من 1 إلى 604.");
-      return;
-    }
-    if (isReview) {
-      const rounds = Number(targetRounds);
-      if (!Number.isInteger(rounds) || rounds < 1 || rounds > 1000) {
-        setError("عدد الدورات يجب أن يكون عدداً صحيحاً من 1 إلى 1000.");
-        return;
-      }
-    }
-
-    try {
-      await onSave({
-        studentId: Number(studentId),
-        type: isReview ? 1 : 0,
-        fromSurah: Number(fromSurah),
-        toSurah: Number(toSurah),
-        pagesPerSession: pages,
-        targetRounds: isReview ? Number(targetRounds) : 1,
-        startDate,
-        daysOfWeek: days.map((day) => weekDays.indexOf(day)),
-      });
-    } catch (saveError) {
-      setError(getErrorMessage(saveError));
-    }
-  }
-
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/40 p-0 sm:items-center sm:p-4"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onClose();
-      }}
-    >
-      <section
-        dir="rtl"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="modal-title"
-        className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-t-3xl bg-white p-5 shadow-2xl sm:rounded-3xl sm:p-7"
-      >
-        <div className="mb-6 flex items-start justify-between gap-4">
-          <div>
-            <h2 id="modal-title" className="text-xl font-extrabold text-slate-800">
-              {isReview ? "إنشاء خطة مراجعة" : "إنشاء خطة حفظ"}
-            </h2>
-            <p className="mt-1 text-sm text-slate-500">
-              {isReview
-                ? "حدد المحفوظ المطلوب مراجعته وجدول المراجعة."
-                : "حدد نطاق الحفظ الجديد والهدف اليومي."}
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="إغلاق"
-            className="grid h-9 w-9 place-items-center rounded-full bg-slate-100 text-slate-500"
-          >
-            <X size={18} />
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-5">
-          <div>
-            <label htmlFor="plan-student" className="mb-2 block text-sm font-semibold text-slate-700">
-              الطالب
-            </label>
-            {students.length === 1 && students[0].self ? (
-              <p className="rounded-xl bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-600">
-                الخطة لحسابك أنت
-              </p>
-            ) : (
-              <select
-                id="plan-student"
-                required
-                value={studentId}
-                onChange={(event) => setStudentId(event.target.value)}
-                className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:border-emerald-600"
-              >
-                <option value="">اختر الطالب</option>
-                {students.map((student) => (
-                  <option key={student.studentId} value={student.studentId}>
-                    {[student.firstName, student.lastName].filter(Boolean).join(" ")} — {student.studentId}
-                  </option>
-                ))}
-              </select>
-            )}
-          </div>
-
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div>
-              <label htmlFor="from-surah" className="mb-2 block text-sm font-semibold text-slate-700">
-                من سورة
-              </label>
-              <select
-                id="from-surah"
-                value={fromSurah}
-                onChange={(event) => setFromSurah(event.target.value)}
-                className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:border-emerald-600"
-              >
-                {surahs.map((surah) => (
-                  <option key={surah.id} value={surah.id}>{surah.id}. {surah.name}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label htmlFor="to-surah" className="mb-2 block text-sm font-semibold text-slate-700">
-                إلى سورة
-              </label>
-              <select
-                id="to-surah"
-                value={toSurah}
-                onChange={(event) => setToSurah(event.target.value)}
-                className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:border-emerald-600"
-              >
-                {surahs.map((surah) => (
-                  <option key={surah.id} value={surah.id}>{surah.id}. {surah.name}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          <p className="rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-            نطاق الخطة يساوي <strong>{totalPages}</strong> صفحة تقريباً.
-          </p>
-
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div>
-              <label htmlFor="pages-session" className="mb-2 block text-sm font-semibold text-slate-700">
-                {isReview ? "الصفحات في جلسة المراجعة" : "صفحات الحفظ في اليوم"}
-              </label>
-              <input
-                id="pages-session"
-                type="number"
-                min="1"
-                max="604"
-                step="1"
-                value={pagesPerSession}
-                onChange={(event) => setPagesPerSession(event.target.value)}
-                required
-                className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-emerald-600"
-              />
-            </div>
-            {isReview && (
-              <div>
-                <label htmlFor="target-rounds" className="mb-2 block text-sm font-semibold text-slate-700">
-                  عدد دورات المراجعة المستهدفة
-                </label>
-                <input
-                  id="target-rounds"
-                  type="number"
-                  min="1"
-                  max="1000"
-                  step="1"
-                  value={targetRounds}
-                  onChange={(event) => setTargetRounds(event.target.value)}
-                  required
-                  className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-sky-600"
-                />
-              </div>
-            )}
-          </div>
-
-          <div>
-            <label htmlFor="plan-start-date" className="mb-2 block text-sm font-semibold text-slate-700">
-              تاريخ بداية الخطة
-            </label>
-            <input
-              id="plan-start-date"
-              type="date"
-              value={startDate}
-              onChange={(event) => setStartDate(event.target.value)}
-              required
-              className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-emerald-600"
-            />
-          </div>
-
-          <fieldset>
-            <legend className="mb-3 text-sm font-semibold text-slate-700">
-              أيام {isReview ? "المراجعة" : "الحفظ"}
-            </legend>
-            <div className="flex flex-wrap gap-2">
-              {weekDays.map((day) => {
-                const selected = days.includes(day);
-                return (
-                  <button
-                    key={day}
-                    type="button"
-                    onClick={() => toggleDay(day)}
-                    aria-pressed={selected}
-                    className={`rounded-full border px-4 py-2 text-sm font-medium ${
-                      selected
-                        ? isReview
-                          ? "border-sky-700 bg-sky-700 text-white"
-                          : "border-emerald-700 bg-emerald-700 text-white"
-                        : "border-slate-200 bg-white text-slate-600"
-                    }`}
-                  >
-                    {day}
-                  </button>
-                );
-              })}
-            </div>
-          </fieldset>
-
-          {error && (
-            <p role="alert" className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">
-              {error}
-            </p>
-          )}
-
-          <div className="flex flex-col-reverse gap-3 border-t border-slate-100 pt-5 sm:flex-row">
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-xl border border-slate-200 px-5 py-3 text-sm font-semibold text-slate-600"
-            >
-              إلغاء
-            </button>
-            <button
-              type="submit"
-              disabled={saving || students.length === 0}
-              className={`rounded-xl px-5 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-60 ${
-                isReview ? "bg-sky-700 hover:bg-sky-800" : "bg-emerald-700 hover:bg-emerald-800"
-              }`}
-            >
-              {saving ? "جارٍ الحفظ..." : "حفظ الخطة"}
-            </button>
-          </div>
-        </form>
-      </section>
+    <div className="flex flex-1 flex-col items-center gap-0.5 px-2">
+      <span className="text-lg font-extrabold text-white sm:text-xl">{value}</span>
+      <span className="truncate text-xs text-emerald-100">{label}</span>
     </div>
   );
 }
 
-export default function Plans() {
-  const { user } = useAuth();
-  const isStudent = user?.role === "Student";
-  const [plans, setPlans] = useState([]);
-  const [students, setStudents] = useState([]);
-  const [activeType, setActiveType] = useState("memorization");
-  const [filter, setFilter] = useState("الكل");
-  const [query, setQuery] = useState("");
-  const [modalOpen, setModalOpen] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [updatingPlanId, setUpdatingPlanId] = useState(null);
-  const [error, setError] = useState("");
+function SectionLabel({ text, count, danger }) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className={`text-sm font-bold ${danger ? "text-rose-700" : "text-slate-800"}`}>{text}</span>
+      <span className={`min-w-6 rounded-full px-2 py-0.5 text-center text-xs ${danger ? "bg-rose-50 text-rose-700" : "bg-slate-100 text-slate-500"}`}>
+        {count}
+      </span>
+      <span className="h-px flex-1 bg-slate-200" />
+    </div>
+  );
+}
 
-  useEffect(() => {
-    let isMounted = true;
-
-    // الطالب لا يملك صلاحية قائمة الطلاب؛ يُنشئ الخطة لنفسه فقط.
-    Promise.all([getMemorizationPlans(), isStudent ? Promise.resolve([]) : getStudents()])
-      .then(([planList, studentList]) => {
-        if (!isMounted) return;
-        setPlans((Array.isArray(planList) ? planList : []).map(toPlanView));
-        setStudents(
-          isStudent
-            ? [{ studentId: user.studentId, firstName: "", lastName: "", isActive: true, self: true }]
-            : (Array.isArray(studentList) ? studentList : []).filter((student) => student.isActive),
-        );
-      })
-      .catch((requestError) => {
-        if (isMounted) setError(getErrorMessage(requestError));
-      })
-      .finally(() => {
-        if (isMounted) setLoading(false);
-      });
-
-    return () => {
-      isMounted = false;
-    };
-  }, [isStudent, user?.studentId]);
-
-  const visiblePlans = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase();
-    return plans.filter((plan) => {
-      const matchesType = plan.type === activeType;
-      const matchesQuery = plan.student.toLowerCase().includes(normalizedQuery);
-      const matchesStatus =
-        filter === "الكل" ||
-        (filter === "نشطة" && plan.active) ||
-        (filter === "متوقفة" && !plan.active);
-      return matchesType && matchesQuery && matchesStatus;
-    });
-  }, [plans, activeType, query, filter]);
-
-
-  async function addPlan(planInput) {
-    setSaving(true);
-    setError("");
-    try {
-      const savedPlan = await addMemorizationPlan(planInput);
-      setPlans((current) => [toPlanView(savedPlan), ...current]);
-      setModalOpen(false);
-    } catch (requestError) {
-      setError(getErrorMessage(requestError));
-      throw requestError;
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function togglePlan(plan) {
-    setUpdatingPlanId(plan.id);
-    setError("");
-    try {
-      const updatedPlan = await updateMemorizationPlanStatus(plan.id, !plan.active);
-      setPlans((current) =>
-        current.map((item) => item.id === plan.id ? toPlanView(updatedPlan) : item),
-      );
-    } catch (requestError) {
-      setError(getErrorMessage(requestError));
-    } finally {
-      setUpdatingPlanId(null);
-    }
-  }
+/** بطاقة المتابعة: النسبة والحالة والمطلوب الآن — ما يلزم المعلّم ليتحرّك. */
+function FollowUpCard({ item, onOpen }) {
+  const { plan, totals, todayRow, closed, key } = item;
+  const state = STATES[key];
+  const headline = closed
+    ? amountLabel(totals.remainingLines)
+    : todayRow
+      ? rangeText(todayRow.from, todayRow.to)
+      : amountLabel(totals.perSessionLines);
 
   return (
-    <main dir="rtl" className="min-h-screen bg-slate-50 p-4 pb-24 sm:p-6 lg:p-8">
-      <div className="mx-auto max-w-7xl">
-        <header className="mb-6 flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
-          <div>
-            <h1 className="text-2xl font-extrabold text-slate-900 sm:text-3xl">
-              {isStudent ? "خططي للحفظ والمراجعة" : "خطط الحفظ والمراجعة"}
-            </h1>
-            <p className="mt-1 text-sm text-slate-500">
-              {isStudent ? "أنشئ خطتك بنفسك، ويُحسب تقدمك تلقائياً من جلسات التسميع المسجلة. " : ""}
-              يُحسب التقدم تلقائياً من جلسات التسميع المسجلة.
+    <button
+      type="button"
+      onClick={onOpen}
+      aria-label={`عرض خطة ${plan.studentName}`}
+      className="flex flex-col gap-3 rounded-2xl border border-slate-100 bg-white p-4 text-right shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+    >
+      <div className="flex items-center gap-3">
+        <span className={`grid h-14 w-14 shrink-0 place-items-center rounded-full border-2 text-sm font-bold ${state.bg} ${state.ring} ${state.text}`}>
+          {totals.progress}٪
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate font-bold text-slate-800">{plan.studentName}</span>
+          <span className={`mt-1 inline-block rounded-full px-2 py-0.5 text-xs font-semibold ${state.bg} ${state.text}`}>
+            {item.missed > 0 && !closed ? `متأخّر ${item.missed} جلسة` : state.label}
+          </span>
+        </span>
+      </div>
+
+      <span className="h-1.5 overflow-hidden rounded-full bg-slate-100">
+        <span className={`block h-full rounded-full ${state.bar}`} style={{ width: `${totals.progress}%` }} />
+      </span>
+
+      <span className="border-t border-slate-100 pt-3">
+        <span className="block text-xs text-slate-500">{closed ? "المتبقّي من النطاق" : "المطلوب الآن"}</span>
+        <span className="mt-0.5 block truncate font-bold text-slate-800">{headline}</span>
+        <span className="block truncate text-xs text-slate-500">
+          {closed
+            ? `انتهت ${formatDay(totals.endDate)}`
+            : todayRow
+              ? `${amountLabel(todayRow.lines)}${todayRow.catchUp ? " · يشمل المتأخّر" : ""}`
+              : `القادمة ${WEEKDAYS[item.next?.weekday] ?? "—"}`}
+        </span>
+      </span>
+    </button>
+  );
+}
+
+/** صفّ مضغوط لبقيّة الخطط: اسم وحالة ونسبة، بلا زحام. */
+function PlanRow({ item, onOpen }) {
+  const { plan, totals, todayRow, closed, key } = item;
+  const state = STATES[key];
+  const detail = closed
+    ? `انتهت ${formatDay(totals.endDate)}`
+    : todayRow
+      ? `اليوم: ${rangeText(todayRow.from, todayRow.to)}`
+      : key === "done"
+        ? "اكتمل النطاق"
+        : key === "paused"
+          ? "موقوفة"
+          : `القادمة ${WEEKDAYS[item.next?.weekday] ?? "—"}`;
+
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      aria-label={`عرض خطة ${plan.studentName}`}
+      className="flex min-h-14 w-full items-center gap-3 rounded-2xl border border-slate-100 bg-white px-4 py-3 text-right transition hover:bg-emerald-50/50"
+    >
+      <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${state.dot}`} />
+      <span className="min-w-0 flex-1">
+        <span className="block truncate font-bold text-slate-800">{plan.studentName}</span>
+        <span className="block truncate text-xs text-slate-500">
+          {plan.type === 1 ? "مراجعة" : "حفظ"} · {detail}
+        </span>
+      </span>
+      <span className={`text-sm font-bold ${state.text}`}>{totals.progress}٪</span>
+    </button>
+  );
+}
+
+export default function Plans() {
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const isStudent = user?.role === "Student";
+  const isStaff = STAFF.includes(user?.role);
+
+  const [data, setData] = useState({ plans: [], records: [] });
+  const [students, setStudents] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [type, setType] = useState("all");
+  const [search, setSearch] = useState("");
+  const [formOpen, setFormOpen] = useState(false);
+
+  const today = riyadhToday();
+  const monthKey = today.slice(0, 7);
+
+  // الخطط وسجلات الطلاب في طلبين لا طلب لكل خطة: نجلب سجلات الجميع مرّة ونوزّعها محلياً.
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const plans = asList(await getMemorizationPlans());
+      const from = plans.reduce((min, plan) => {
+        const start = String(plan.startDate).slice(0, 10);
+        return !min || start < min ? start : min;
+      }, "");
+      const records = plans.length ? asList(await getMemorizationRecords(from ? { from } : {})) : [];
+      setData({ plans, records });
+    } catch (requestError) {
+      setError(getErrorMessage(requestError) || "تعذّر تحميل الخطط.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  // الطالب لا يملك قائمة الطلاب؛ يُنشئ الخطة لنفسه فقط.
+  useEffect(() => {
+    if (isStudent) {
+      setStudents(user?.studentId ? [{ studentId: user.studentId, self: true }] : []);
+      return;
+    }
+    if (!isStaff) return;
+    getStudents()
+      .then((list) => setStudents(asList(list).filter((student) => student.isActive !== false)))
+      .catch(() => setStudents([]));
+  }, [isStudent, isStaff, user?.studentId]);
+
+  const items = useMemo(() => {
+    const byStudent = new Map();
+    for (const record of data.records) {
+      const key = Number(record.studentId);
+      if (!byStudent.has(key)) byStudent.set(key, []);
+      byStudent.get(key).push(record);
+    }
+    return data.plans
+      .map((plan) => {
+        try {
+          const view = buildPlanView({
+            plan,
+            rawRecords: byStudent.get(Number(plan.studentId)) ?? [],
+            calculator,
+            today,
+            monthKey,
+          });
+          return planState({ plan, view });
+        } catch {
+          return null; // خطة ببيانات غير صالحة لا تُسقط الصفحة
+        }
+      })
+      .filter((item) => item?.totals);
+  }, [data, today, monthKey]);
+
+  const shown = useMemo(() => {
+    const query = search.trim();
+    return items.filter((item) => {
+      const isReview = item.plan.type === 1;
+      const matchType = type === "all" || (type === "review" ? isReview : !isReview);
+      const matchSearch = !query || String(item.plan.studentName ?? "").includes(query);
+      return matchType && matchSearch;
+    });
+  }, [items, type, search]);
+
+  const followUp = useMemo(() => shown.filter((item) => item.needsFollowUp).sort((a, b) => b.missed - a.missed), [shown]);
+  const rest = useMemo(() => shown.filter((item) => !item.needsFollowUp), [shown]);
+
+  const summary = useMemo(() => {
+    const studentsCount = new Set(items.map((item) => item.plan.studentId)).size;
+    const dueToday = items.filter((item) => item.todayRow).length;
+    const average = items.length ? Math.round(items.reduce((sum, item) => sum + item.totals.progress, 0) / items.length) : 0;
+    return { plans: items.length, students: studentsCount, dueToday, average, followUp: items.filter((i) => i.needsFollowUp).length };
+  }, [items]);
+
+  const canCreate = students.length > 0;
+  const open = (item) => navigate(`/plans/${item.plan.memorizationPlanId}`);
+
+  return (
+    <main dir="rtl" className="mx-auto max-w-6xl space-y-5">
+      <section className="leaf-pattern rounded-3xl bg-emerald-800 p-5 text-white shadow-sm sm:p-6">
+        <div className="flex items-start gap-3">
+          <div className="min-w-0 flex-1">
+            <h1 className="text-2xl font-extrabold">{isStudent ? "خططي للحفظ والمراجعة" : "خطط الحفظ والمراجعة"}</h1>
+            <p className="mt-1 text-sm text-emerald-100">
+              {summary.plans} خطة لـ {summary.students} {summary.students === 1 ? "طالب" : "طالباً"}
             </p>
           </div>
-          <button
-            type="button"
-            disabled={loading || students.length === 0}
-            onClick={() => setModalOpen(true)}
-            className={`inline-flex items-center justify-center gap-2 rounded-xl px-5 py-3 font-bold text-white disabled:cursor-not-allowed disabled:opacity-60 ${
-              activeType === "review" ? "bg-sky-700 hover:bg-sky-800" : "bg-emerald-700 hover:bg-emerald-800"
-            }`}
-          >
-            <Plus size={19} />
-            {activeType === "review" ? "إنشاء خطة مراجعة" : "إنشاء خطة حفظ"}
-          </button>
-        </header>
-
-        {error && (
-          <p role="alert" className="mb-5 rounded-xl bg-rose-50 p-3 text-sm text-rose-700">
-            {error}
-          </p>
-        )}
-
-        <div className="mb-6 grid grid-cols-2 gap-2 rounded-2xl border border-slate-100 bg-white p-2 shadow-sm">
-          <button
-            type="button"
-            onClick={() => { setActiveType("memorization"); setFilter("الكل"); }}
-            className={`flex items-center justify-center gap-2 rounded-xl px-3 py-3 text-sm font-bold transition sm:text-base ${
-              activeType === "memorization" ? "bg-emerald-700 text-white shadow-sm" : "text-slate-500 hover:bg-slate-50"
-            }`}
-          >
-            <BookOpenCheck size={19} /> خطة الحفظ
-            <span className="rounded-full bg-white/20 px-2 py-0.5 text-xs">
-              {plans.filter((plan) => plan.type === "memorization").length}
-            </span>
-          </button>
-          <button
-            type="button"
-            onClick={() => { setActiveType("review"); setFilter("الكل"); }}
-            className={`flex items-center justify-center gap-2 rounded-xl px-3 py-3 text-sm font-bold transition sm:text-base ${
-              activeType === "review" ? "bg-sky-700 text-white shadow-sm" : "text-slate-500 hover:bg-slate-50"
-            }`}
-          >
-            <RotateCcw size={19} /> خطة المراجعة
-            <span className="rounded-full bg-white/20 px-2 py-0.5 text-xs">
-              {plans.filter((plan) => plan.type === "review").length}
-            </span>
-          </button>
+          {canCreate && (
+            <button
+              type="button"
+              onClick={() => setFormOpen(true)}
+              className="inline-flex h-10 shrink-0 items-center gap-1.5 rounded-xl border border-white/35 bg-white/15 px-4 text-sm font-bold text-white hover:bg-white/25"
+            >
+              <Plus size={17} /> خطة
+            </button>
+          )}
         </div>
 
-        <section className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <label className={`relative block w-full sm:max-w-sm ${isStudent ? "hidden" : ""}`}>
+        <div className="mt-4 flex items-center rounded-2xl bg-white/15 py-3">
+          <StatCell label="تحتاج متابعة" value={summary.followUp} />
+          <span className="h-7 w-px bg-white/30" />
+          <StatCell label="مطلوب اليوم" value={summary.dueToday} />
+          <span className="h-7 w-px bg-white/30" />
+          <StatCell label="متوسّط الإنجاز" value={`${summary.average}٪`} />
+        </div>
+      </section>
+
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <div className="sm:w-80">
+          <Segmented options={TYPE_FILTERS} value={type} onChange={setType} label="نوع الخطة" />
+        </div>
+        {isStaff && (
+          <label className="relative block flex-1">
             <Search size={18} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               type="search"
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="ابحث باسم الطالب..."
-              className="w-full rounded-xl border border-slate-200 py-3 pe-10 ps-4 text-sm outline-none focus:border-emerald-600"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="ابحث باسم الطالب"
+              className="h-12 w-full rounded-2xl border border-slate-200 bg-white pe-10 ps-4 text-sm outline-none focus:border-emerald-600"
             />
           </label>
-          <div className="flex gap-2">
-            {["الكل", "نشطة", "متوقفة"].map((item) => (
-              <button
-                key={item}
-                type="button"
-                onClick={() => setFilter(item)}
-                className={`rounded-full px-4 py-2 text-sm font-semibold ${
-                  filter === item
-                    ? activeType === "review" ? "bg-sky-700 text-white" : "bg-emerald-700 text-white"
-                    : "bg-slate-100 text-slate-600"
-                }`}
-              >
-                {item}
-              </button>
-            ))}
-          </div>
-        </section>
-
-        {loading ? (
-          <p className="rounded-2xl border border-slate-100 bg-white p-12 text-center text-sm text-slate-400">
-            جارٍ تحميل الخطط...
-          </p>
-        ) : visiblePlans.length ? (
-          <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {visiblePlans.map((plan) => (
-              <PlanCard
-                key={plan.id}
-                plan={plan}
-                onToggle={togglePlan}
-                isUpdating={updatingPlanId === plan.id}
-              />
-            ))}
-          </section>
-        ) : (
-          <section className="rounded-2xl border border-dashed border-slate-300 bg-white px-5 py-14 text-center">
-            <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-slate-50 text-slate-400">
-              {activeType === "review" ? <RotateCcw size={27} /> : <BookOpenCheck size={27} />}
-            </div>
-            <h2 className="mt-4 font-bold text-slate-700">
-              لا توجد {activeType === "review" ? "خطط مراجعة" : "خطط حفظ"}
-            </h2>
-            <p className="mt-2 text-sm text-slate-500">أنشئ خطة جديدة لتظهر هنا.</p>
-          </section>
         )}
       </div>
 
-      {modalOpen && (
-        <AddPlanModal
-          type={activeType}
+      {loading ? (
+        <p className="rounded-2xl border border-slate-100 bg-white p-12 text-center text-sm text-slate-500">جارٍ تحميل الخطط…</p>
+      ) : error ? (
+        <div role="alert" className="rounded-2xl bg-rose-50 p-6 text-center text-sm text-rose-700">
+          {error}
+          <button type="button" onClick={load} className="ms-3 font-bold underline">
+            إعادة المحاولة
+          </button>
+        </div>
+      ) : shown.length === 0 ? (
+        <section className="rounded-2xl border border-dashed border-slate-300 bg-white px-5 py-14 text-center">
+          <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-slate-50 text-slate-400">
+            <ClipboardList size={27} />
+          </div>
+          <h2 className="mt-4 font-bold text-slate-700">{items.length ? "لا نتائج" : "لا توجد خطط"}</h2>
+          <p className="mt-2 text-sm text-slate-500">
+            {items.length
+              ? "غيّر المرشّح أو كلمة البحث."
+              : isStaff
+                ? "أنشئ خطة لأحد طلابك لتظهر هنا."
+                : "لم تُسجَّل لك خطة بعد."}
+          </p>
+          {canCreate && !items.length && (
+            <button
+              type="button"
+              onClick={() => setFormOpen(true)}
+              className="mt-5 inline-flex items-center gap-2 rounded-xl bg-emerald-800 px-5 py-3 text-sm font-bold text-white hover:bg-emerald-900"
+            >
+              <Plus size={17} /> إنشاء خطة
+            </button>
+          )}
+        </section>
+      ) : (
+        <>
+          {followUp.length > 0 && (
+            <section className="space-y-3">
+              <SectionLabel text="تحتاج متابعة" count={followUp.length} danger />
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {followUp.map((item) => (
+                  <FollowUpCard key={item.plan.memorizationPlanId} item={item} onOpen={() => open(item)} />
+                ))}
+              </div>
+            </section>
+          )}
+
+          {rest.length > 0 && (
+            <section className="space-y-2">
+              <SectionLabel text={followUp.length ? "بقيّة الخطط" : "الخطط"} count={rest.length} />
+              <div className="grid gap-2 lg:grid-cols-2">
+                {rest.map((item) => (
+                  <PlanRow key={item.plan.memorizationPlanId} item={item} onOpen={() => open(item)} />
+                ))}
+              </div>
+            </section>
+          )}
+        </>
+      )}
+
+      {formOpen && (
+        <PlanFormModal
           students={students}
-          saving={saving}
-          onClose={() => setModalOpen(false)}
-          onSave={addPlan}
+          onClose={() => setFormOpen(false)}
+          onSaved={() => {
+            setFormOpen(false);
+            load();
+          }}
         />
       )}
     </main>

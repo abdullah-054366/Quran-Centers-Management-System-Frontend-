@@ -1,22 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, Printer } from "lucide-react";
+import { AlertTriangle, ChevronLeft, ChevronRight, CirclePause, CirclePlay, PencilLine, Printer } from "lucide-react";
 import { Link, useParams } from "react-router";
-import { getSurahMeta } from "quran-meta/hafs";
-import { getMemorizationPlan } from "../../api/plans";
+import { getMemorizationPlan, updateMemorizationPlanStatus } from "../../api/plans";
 import { getMemorizationRecords } from "../../api/memorization";
 import { getErrorMessage } from "../../api/axiosClient";
 import { useAuth } from "../../context/AuthContext";
-import ayahLines from "../../data/ayahLines.json";
 import { amountLabel, buildPlanView, WEEKDAYS } from "../../lib/planSchedule";
-import { createLineCalculator } from "../../lib/quranLines";
+import { getStudents } from "../../api/students";
+import PlanFormModal from "../../components/plans/PlanFormModal";
+import { asList, calculator, formatDay, rangeText, riyadhToday, surahName } from "../../components/plans/planUi";
 
-const calculator = createLineCalculator(ayahLines);
-const stripTashkeel = (text) => text.replace(/[ً-ٰٟۖ-ۭ]/g, "");
-const surahName = (n) => stripTashkeel(getSurahMeta(n).name);
-
-function riyadhToday() {
-  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Riyadh" }).format(new Date());
-}
+const STAFF = ["PlatformAdmin", "Admin", "CenterAdmin", "Teacher"];
 
 function shiftMonth(key, delta) {
   const [year, month] = key.split("-").map(Number);
@@ -27,17 +21,6 @@ function shiftMonth(key, delta) {
 const formatMonth = (key) =>
   new Intl.DateTimeFormat("ar-SA-u-ca-gregory-nu-latn", { month: "long", year: "numeric", timeZone: "UTC" })
     .format(new Date(`${key}-01T00:00:00Z`));
-
-const formatDay = (date) =>
-  new Intl.DateTimeFormat("ar-SA-u-ca-gregory-nu-latn", { day: "numeric", month: "long", timeZone: "UTC" })
-    .format(new Date(`${date}T00:00:00Z`));
-
-function rangeText(from, to) {
-  if (!from || !to) return "—";
-  return from.surah === to.surah
-    ? `${surahName(from.surah)} ${from.ayah}–${to.ayah}`
-    : `${surahName(from.surah)} ${from.ayah} ← ${surahName(to.surah)} ${to.ayah}`;
-}
 
 const gradeOf = (notes) => String(notes || "").match(/التقييم:\s*(.*?)(?:\s+—\s+|$)/)?.[1] || "";
 
@@ -65,6 +48,11 @@ export default function PlanSchedule() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [month, setMonth] = useState(() => riyadhToday().slice(0, 7));
+  const [busy, setBusy] = useState(false);
+  const [actionError, setActionError] = useState("");
+  const [editOpen, setEditOpen] = useState(false);
+  const [students, setStudents] = useState([]);
+  const isStaff = STAFF.includes(user?.role);
   const today = riyadhToday();
 
   useEffect(() => {
@@ -89,6 +77,26 @@ export default function PlanSchedule() {
     })();
     return () => { current = false; };
   }, [planId]);
+
+  // قائمة الطلاب لنموذج التعديل (الطالب لا يُغيَّر، لكن القائمة تعرض اسمه).
+  useEffect(() => {
+    if (!editOpen || !isStaff || students.length) return;
+    getStudents().then((list) => setStudents(asList(list))).catch(() => setStudents([]));
+  }, [editOpen, isStaff, students.length]);
+
+  // إيقاف الخطة وتفعيلها هنا لا في القائمة: القائمة للمسح والتفاصيل للتصرّف.
+  async function toggleStatus() {
+    setBusy(true);
+    setActionError("");
+    try {
+      const updated = await updateMemorizationPlanStatus(plan.memorizationPlanId, !plan.isActive);
+      setPlan((cur) => (cur ? { ...cur, ...updated } : cur));
+    } catch (requestError) {
+      setActionError(getErrorMessage(requestError) || "تعذّر تغيير حالة الخطة.");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   const view = useMemo(
     () => (plan ? buildPlanView({ plan, rawRecords: records, calculator, today, monthKey: month }) : null),
@@ -127,10 +135,39 @@ export default function PlanSchedule() {
             >
               {isReview ? "خطة مراجعة" : "خطة حفظ"}
             </span>
+            {!plan.isActive && (
+              <span className="me-2 inline-block rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-500">
+                موقوفة
+              </span>
+            )}
             من سورة {surahName(plan.fromSurah)} إلى سورة {surahName(plan.toSurah)} ·{" "}
-            {plan.pagesPerSession === 1 ? "صفحة" : `${plan.pagesPerSession} صفحات`} في الجلسة
-            {isReview ? ` · ${plan.targetRounds} دورات` : ""} · {(plan.daysOfWeek ?? []).map((d) => WEEKDAYS[d]).join("، ")}
+            {t.derived ? amountLabel(t.perSessionLines) : plan.pagesPerSession === 1 ? "صفحة" : `${plan.pagesPerSession} صفحات`} في الجلسة
+            {isReview ? ` · ${plan.targetRounds} دورات` : ""}
           </p>
+          <p className="text-xs text-slate-500">
+            {(plan.daysOfWeek ?? []).map((d) => WEEKDAYS[d]).join("، ")}
+            {t.endDate ? ` · ${t.closedIncomplete || t.completed ? "انتهت" : "تنتهي"} ${formatDay(t.endDate)}` : ""}
+          </p>
+          {isStaff && (
+            <div className="flex flex-wrap gap-2 pt-1 print:hidden">
+              <button
+                type="button"
+                onClick={() => setEditOpen(true)}
+                className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-emerald-50 px-4 text-sm font-bold text-emerald-800 hover:bg-emerald-100"
+              >
+                <PencilLine size={16} /> تعديل
+              </button>
+              <button
+                type="button"
+                onClick={toggleStatus}
+                disabled={busy}
+                className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-60"
+              >
+                {plan.isActive ? <CirclePause size={16} /> : <CirclePlay size={16} />}
+                {busy ? "جارٍ الحفظ…" : plan.isActive ? "إيقاف" : "تفعيل"}
+              </button>
+            </div>
+          )}
         </div>
 
         <div className="flex items-center gap-2.5 print:hidden">
@@ -163,6 +200,18 @@ export default function PlanSchedule() {
           </button>
         </div>
       </header>
+
+      {actionError && (
+        <p role="alert" className="rounded-2xl bg-rose-50 px-4 py-3 text-sm text-rose-700 print:hidden">{actionError}</p>
+      )}
+
+      {t.closedIncomplete && (
+        <p className="flex gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-7 text-amber-800">
+          <AlertTriangle size={18} className="mt-1 shrink-0" />
+          انتهت مدّة الخطة ولم يكتمل النطاق — أُقفلت على {t.progress}٪، والمتبقّي {amountLabel(t.remainingLines)}. أنشئ
+          خطة جديدة بالمتبقّي إن أردت متابعته.
+        </p>
+      )}
 
       {todayRow && month === today.slice(0, 7) && (
         <section className="rounded-2xl border border-emerald-100 bg-emerald-50/60 px-5 py-4 print:hidden">
@@ -267,6 +316,7 @@ export default function PlanSchedule() {
                   <p className="mt-0.5 text-xs text-slate-500">
                     {amountLabel(row.lines)}
                     {row.catchUp ? " · تشمل المتأخر" : ""}
+                    {row.extra ? " · خارج أيام الخطة" : ""}
                     {gradeOf(row.notes) ? ` · التقييم: ${gradeOf(row.notes)}` : ""}
                   </p>
                 </article>
@@ -274,6 +324,18 @@ export default function PlanSchedule() {
             })}
           </section>
         </>
+      )}
+
+      {editOpen && (
+        <PlanFormModal
+          plan={plan}
+          students={students}
+          onClose={() => setEditOpen(false)}
+          onSaved={(saved) => {
+            setEditOpen(false);
+            if (saved) setPlan((cur) => ({ ...cur, ...saved }));
+          }}
+        />
       )}
 
       <p className="text-xs text-slate-400">

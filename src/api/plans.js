@@ -41,3 +41,13 @@ export const getMemorizationPlan = async (planId) => {
     throw error;
   }
 };
+
+export const updateMemorizationPlan = async (planId, plan) => {
+  try {
+    const response = await api.put(`${PLANS_ENDPOINT}/${planId}`, plan);
+    return response.data;
+  } catch (error) {
+    console.error("Error editing memorization plan:", error);
+    throw error;
+  }
+};
