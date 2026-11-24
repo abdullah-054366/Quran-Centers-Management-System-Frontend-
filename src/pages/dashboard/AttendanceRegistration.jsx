@@ -47,9 +47,11 @@ function AttendanceRow({ name, status, note, noteOpen, onToggleNote, onStatus, o
   return (
     <div className={`rounded-2xl border px-3 py-2.5 ${tone.row}`}>
       <div className="flex items-center gap-2">
-        <Avatar name={name} />
+        <span className="hidden sm:block">
+          <Avatar name={name} />
+        </span>
         <span className="min-w-0 flex-1 truncate font-bold text-slate-800">{name}</span>
-        <div role="radiogroup" aria-label={`حالة ${name}`} className="flex gap-1.5">
+        <div role="radiogroup" aria-label={`حالة ${name}`} className="flex shrink-0 gap-1 sm:gap-1.5">
           {STATUSES.map((option) => {
             const active = status === option.value;
             return (
@@ -61,7 +63,7 @@ function AttendanceRow({ name, status, note, noteOpen, onToggleNote, onStatus, o
                 aria-label={`${name}: ${option.label}`}
                 title={option.label}
                 onClick={() => onStatus(option.value)}
-                className={`grid h-10 w-10 place-items-center rounded-xl border text-sm font-extrabold transition sm:w-auto sm:px-3 ${
+                className={`grid h-10 w-9 shrink-0 place-items-center rounded-xl border text-sm font-extrabold transition sm:w-auto sm:px-3 ${
                   active ? `${TONES[option.value].solid} text-white` : "border-slate-200 bg-white text-slate-500 hover:bg-slate-50"
                 }`}
               >
@@ -77,7 +79,7 @@ function AttendanceRow({ name, status, note, noteOpen, onToggleNote, onStatus, o
         <button
           type="button"
           onClick={onToggleNote}
-          className="mt-2 flex w-full items-center gap-1.5 ps-11 text-right text-xs font-semibold text-emerald-800 hover:underline"
+          className="mt-2 flex w-full items-center gap-1.5 text-right text-xs font-semibold text-emerald-800 hover:underline sm:ps-11"
         >
           {note ? <PencilLine size={13} /> : <Plus size={13} />}
           <span className="truncate">{note || "إضافة ملاحظة"}</span>
@@ -184,7 +186,7 @@ function RollCall({ students, statusBy, index, onIndex, onStatus, onClose, halaq
         </div>
       )}
 
-      <footer className="border-t border-slate-200 bg-white px-5 py-3">
+      <footer className="border-t border-slate-200 bg-white px-5 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
         <div className="mx-auto flex max-w-xl gap-2.5">
           <button
             type="button"
@@ -392,7 +394,7 @@ export default function AttendanceRegistration() {
           <h1 className="text-2xl font-extrabold text-slate-800">تسجيل الحضور</h1>
           <p className="mt-1 text-sm text-slate-500">الحلقات المسموح بها لحسابك</p>
         </div>
-        <label className="relative flex h-10 shrink-0 items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 text-sm font-bold text-emerald-800 focus-within:border-emerald-700">
+        <label className="relative flex overflow-hidden h-10 shrink-0 items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 text-sm font-bold text-emerald-800 focus-within:border-emerald-700">
           <CalendarDays size={16} />
           <span>{date === today ? "اليوم" : formatShortDate(date)}</span>
           <input
@@ -401,13 +403,13 @@ export default function AttendanceRegistration() {
             max={today}
             onChange={(event) => changeDate(event.target.value)}
             aria-label="التاريخ"
-            className="absolute inset-0 cursor-pointer opacity-0"
+            className="absolute inset-0 h-full w-full min-w-0 cursor-pointer appearance-none opacity-0"
           />
         </label>
       </header>
 
       {/* الحلقة */}
-      <label className="relative flex items-center gap-3 rounded-2xl border border-slate-100 bg-white px-4 py-3 shadow-sm focus-within:border-emerald-700">
+      <label className="relative flex overflow-hidden items-center gap-3 rounded-2xl border border-slate-100 bg-white px-4 py-3 shadow-sm focus-within:border-emerald-700">
         <Users size={19} className="text-emerald-800" />
         <span className="min-w-0 flex-1 truncate font-bold text-slate-800">
           {halaqa?.halaqaName ?? (loadingOptions ? "جارٍ تحميل الحلقات…" : halaqas.length ? "اختر الحلقة" : "لا توجد حلقات")}
@@ -419,7 +421,7 @@ export default function AttendanceRegistration() {
           value={halaqaId}
           disabled={loadingOptions || !halaqas.length}
           onChange={(event) => changeHalaqa(event.target.value)}
-          className="absolute inset-0 cursor-pointer opacity-0 disabled:cursor-not-allowed"
+          className="absolute inset-0 h-full w-full min-w-0 cursor-pointer appearance-none opacity-0 disabled:cursor-not-allowed"
         >
           {halaqas.map((h) => (
             <option key={h.halaqaId} value={h.halaqaId}>
@@ -515,7 +517,8 @@ export default function AttendanceRegistration() {
         </div>
       )}
 
-      {/* الشريط السفلي: التقدّم وزر الحفظ */}
+      {/* الشريط السفلي: التقدّم وزر الحفظ (يظهر فقط عند وجود طلاب) */}
+      {students.length > 0 && (
       <div className="sticky bottom-24 z-10 flex items-center gap-3 rounded-2xl border border-slate-100 bg-white/95 p-3 shadow-lg backdrop-blur lg:bottom-4">
         <div className="min-w-0 flex-1">
           <div className="h-1.5 overflow-hidden rounded-full bg-slate-100">
@@ -535,6 +538,7 @@ export default function AttendanceRegistration() {
           {saving ? "جارٍ الحفظ…" : "حفظ"}
         </button>
       </div>
+      )}
 
       {callOpen && (
         <RollCall

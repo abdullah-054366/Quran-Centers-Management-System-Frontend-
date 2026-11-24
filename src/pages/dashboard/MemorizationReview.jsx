@@ -455,7 +455,7 @@ export default function MemorizationReview() {
           <h1 className="text-2xl font-extrabold text-slate-800">تسجيل الحفظ</h1>
           <p className="mt-1 text-sm text-slate-500">اختر الطالب وما قرأه، ويُحسب المقدار تلقائياً.</p>
         </div>
-        <label className="relative flex h-10 shrink-0 items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 text-sm font-bold text-emerald-800 focus-within:border-emerald-700">
+        <label className="relative flex overflow-hidden h-10 shrink-0 items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 text-sm font-bold text-emerald-800 focus-within:border-emerald-700">
           <CalendarDays size={16} />
           <span>{date === today ? "اليوم" : formatDate(date)}</span>
           <input
@@ -464,14 +464,14 @@ export default function MemorizationReview() {
             max={today}
             onChange={(event) => event.target.value && setDate(event.target.value)}
             aria-label="التاريخ"
-            className="absolute inset-0 cursor-pointer opacity-0"
+            className="absolute inset-0 h-full w-full min-w-0 cursor-pointer appearance-none opacity-0"
           />
         </label>
       </header>
 
       <form onSubmit={handleSubmit} className="space-y-5">
         {/* بطاقة الطالب */}
-        <label className="relative flex min-h-[76px] items-center gap-3 rounded-2xl border border-slate-100 bg-white p-4 shadow-sm focus-within:border-emerald-700">
+        <label className="relative flex overflow-hidden min-h-[76px] items-center gap-3 rounded-2xl border border-slate-100 bg-white p-4 shadow-sm focus-within:border-emerald-700">
           <span className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-emerald-100 font-bold text-emerald-800">
             {selectedStudent ? initials(selectedStudent.name) : <UserRound size={22} />}
           </span>
@@ -488,7 +488,7 @@ export default function MemorizationReview() {
             value={studentId}
             disabled={loadingStudents || !students.length}
             onChange={(event) => setStudentId(event.target.value)}
-            className="absolute inset-0 cursor-pointer opacity-0 disabled:cursor-not-allowed"
+            className="absolute inset-0 h-full w-full min-w-0 cursor-pointer appearance-none opacity-0 disabled:cursor-not-allowed"
           >
             <option value="">اختر الطالب</option>
             {students.map((student) => (

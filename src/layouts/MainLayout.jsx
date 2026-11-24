@@ -5,7 +5,7 @@ import MobileBottomNav from "../components/MobileBottomNav";
 
 export default function MainLayout() {
   return (
-    <div dir="rtl" className="min-h-screen bg-[#f6f8f6] text-slate-800">
+    <div dir="rtl" className="min-h-screen overflow-x-clip bg-[#f6f8f6] text-slate-800">
       {/* القائمة الجانبية تظهر على الشاشات الكبيرة فقط */}
       <div className="hidden lg:block print:hidden">
         <Sidebar />
