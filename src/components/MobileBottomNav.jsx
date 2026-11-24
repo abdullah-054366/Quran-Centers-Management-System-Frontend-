@@ -92,7 +92,7 @@ export default function MobileBottomNav() {
       <nav
         dir="rtl"
         aria-label="التنقل الرئيسي"
-        className={`fixed inset-x-0 bottom-0 z-50 grid ${columnsClass} items-end overflow-visible border-t border-slate-100 bg-white px-1 pt-1 shadow-[0_-5px_20px_rgba(0,0,0,0.07)] lg:hidden`}
+        className={`fixed inset-x-0 bottom-0 z-40 grid ${columnsClass} items-end overflow-visible border-t border-slate-100 bg-white px-1 pt-1 shadow-[0_-5px_20px_rgba(0,0,0,0.07)] lg:hidden`}
         style={{ paddingBottom: "max(env(safe-area-inset-bottom), 8px)" }}
       >
         {primary.map((link) => (

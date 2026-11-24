@@ -23,7 +23,7 @@ export function Modal({ title, onClose, busy = false, children, wide = false }) 
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/40 p-3 sm:items-center"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/40 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:items-center sm:pb-3"
       onClick={busy ? undefined : onClose}
     >
       <div
